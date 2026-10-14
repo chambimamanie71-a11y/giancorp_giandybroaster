@@ -108,7 +108,7 @@ const FB={url:(_sbc.url||SB_URL_DEFAULT).trim().replace(/\/+$/,''),key:(_sbc.key
 const SYNC_KEYS=['users','recetas','kardex','cajas','sucs','transf','clientes','provs','cfg','audit','mermas','gastos','compras','anuladas','trab','turnos','asist','accesos','nomv','sueldos','bmov','cxp','cxpp','presup','promos','fondos','fmov','frules','activos','qrlog','crec','ingx','asreq','calev','rptlog','rechist','recver','prodplan','synclog','aprob','lotes','phist'],ITEM_KEYS=['insumos','productos'];
 const arr=x=>Array.isArray(x)?x:(x?Object.values(x):[]),strip=x=>JSON.stringify({...x,stock:undefined,sx:undefined}),fixV=v=>({...v,items:arr(v.items),cons:arr(v.cons)});
 const fbu=p=>FB.url+'/erp'+p+'.json';
-function setStat(t,c){if(t){FB.t=t;FB.c=c}const e=document.getElementById('st');if(e){e.textContent=FB.url?(FB.t||'● Conectando…'):'● Modo local (sin nube)';e.style.color=FB.url&&FB.c?FB.c:'var(--mu)'}}
+function setStat(t,c){if(t){FB.t=t;FB.c=c}const e=document.getElementById('st');if(e){e.textContent=FB.url?((FB.t||'● Conectando…')+pendTxt()):'● Modo local (sin nube)';e.style.color=FB.url&&FB.c?FB.c:'var(--mu)'}}
 const SBX=()=>{let tok=null,rt=null,exp=0;
  const H=x=>({apikey:FB.key,...((tok||/^eyJ/.test(FB.key))?{Authorization:'Bearer '+(tok||FB.key)}:{}),'Content-Type':'application/json',...x});
  async function auth(){const r=await fetch(FB.url+'/auth/v1/token?grant_type='+(rt?'refresh_token':'password'),{method:'POST',headers:{apikey:FB.key,'Content-Type':'application/json'},body:JSON.stringify(rt?{refresh_token:rt}:{email:FB.em,password:FB.pw})});const j=await r.json().catch(()=>({}));if(!r.ok){rt=null;throw new Error(j.error_description||j.msg||j.message||'HTTP '+r.status)}tok=j.access_token;rt=j.refresh_token;exp=Date.now()+Math.max(60,(j.expires_in||3600)-60)*1000}
@@ -119,24 +119,36 @@ const SBX=()=>{let tok=null,rt=null,exp=0;
   select(c){q.sel=c;return o},order(c){q.ord=c;return o},limit(n){q.lim=n;return o},range(a,b){q.rng=[a,b];return o},
   gt(c,v){q.f.push(c+'=gt.'+encodeURIComponent(v));return o},neq(c,v){q.f.push(c+'=neq.'+encodeURIComponent(v));return o},eq(c,v){q.f.push(c+'=eq.'+encodeURIComponent(v));return o},
   like(c,v){q.f.push(c+'=like.'+encodeURIComponent(v.replace(/%/g,'*')));return o},
-  delete(){q.m='DELETE';return o},upsert(rows,op){q.m='POST';q.body=rows;q.oc=(op&&op.onConflict)||'path';return o},
+  nlike(c,v){q.f.push(c+'=not.like.'+encodeURIComponent(v.replace(/%/g,'*')));return o},delete(){q.m='DELETE';return o},upsert(rows,op){q.m='POST';q.body=rows;q.oc=(op&&op.onConflict)||'path';return o},
   then(a,b){const p=[];if(q.m=='GET'){p.push('select='+encodeURIComponent(q.sel),...q.f);if(q.ord)p.push('order='+q.ord);if(q.lim)p.push('limit='+q.lim)}else if(q.m=='DELETE')p.push(...q.f);else p.push('on_conflict='+q.oc);
    const h={};if(q.rng){h['Range-Unit']='items';h.Range=q.rng[0]+'-'+q.rng[1]}if(q.m!='GET')h.Prefer=(q.m=='POST'?'resolution=merge-duplicates,':'')+'return=minimal';
    return req(FB.url+'/rest/v1/'+tb+'?'+p.join('&'),{method:q.m,headers:h,body:q.body?JSON.stringify(q.body):undefined}).then(a,b)}};return o};
  return{from:Q,rpc:(n,a)=>req(FB.url+'/rest/v1/rpc/'+n,{method:'POST',body:JSON.stringify(a||{})}),auth:{signInWithPassword:async()=>{try{await auth();return{}}catch(e){return{error:e}}}},token:()=>tok}};
 let SBC=(FB.url&&FB.key)?SBX():null;
 const TB='erp_nodes',cl=p=>String(p||'').replace(/^\/+|\/+$/g,''),lk=s=>s.replace(/[\\%_]/g,'\\$&');
+
+// ===================== GIANCORP · NÚCLEO DE SINCRONIZACIÓN (concurrencia + offline) =====================
+// 1) Bitácoras (kardex, auditoría...) = una fila por movimiento en erp_nodes.data (jamás se pisa un array completo).
+// 2) Stock = incrementos atómicos con ID de operación (idempotentes) y cola persistente si no hay red (pending_sync).
+const LOGS=['kardex','audit','synclog','qrlog','rptlog'],lg={};
+const hs=x=>{let h=5381;for(let i=0;i<x.length;i++)h=((h<<5)+h+x.charCodeAt(i))>>>0;return h.toString(36)},lid=e=>((e&&e.ts)||0)+'_'+hs(JSON.stringify(e));
+const IQ=(()=>{try{return JSON.parse(localStorage.getItem('giandy_incq')||'[]')}catch(e){return[]}})(),sq=()=>{try{localStorage.setItem('giandy_incq',JSON.stringify(IQ))}catch(e){}};
+let flushing=false;
+async function flushInc(){if(flushing||!SBC||!FB.ready)return;flushing=true;try{while(IQ.length){const x=IQ[0],r=await SBC.rpc('erp_inc',{p_path:x.p,p_delta:x.d,p_op:x.o});if(r.error){console.warn('Cola de stock:',r.error.message);break}IQ.shift();sq()}}catch(e){}finally{flushing=false;setStat()}}
+function pendTxt(){try{const n=IQ.length+S.ventas.filter(v=>!FB.sent[v.id]).length;return n?' · '+n+' pendiente'+(n>1?'s':'')+' de enviar':''}catch(e){return''}}
 function flat(p,d){const o=[],s=p?p.split('/'):[],k=s[0],n=s.length;
  const item=(q,x)=>{if(x==null)return;const{sx,stock,...r}=x;o.push({path:q,data:r});Object.entries(sx||{}).forEach(([b,v])=>o.push({path:q+'/sx/'+b,data:v}))};
  if(!n)Object.entries(d||{}).forEach(([k2,v])=>flat(k2,v).forEach(r=>o.push(r)));
  else if(ITEM_KEYS.includes(k)&&n==1)Object.entries(d||{}).forEach(([i,x])=>item(k+'/'+i,x));
  else if(ITEM_KEYS.includes(k)&&n==2)item(p,d);
+ else if(LOGS.includes(k)&&n==1)arr(d).forEach(e=>{if(e&&typeof e=='object')o.push({path:k+'/'+lid(e),data:e})});
  else if(k=='ventas'&&n==1)Object.values(d||{}).forEach(v=>o.push({path:'ventas/'+v.id,data:v}));
  else o.push({path:p,data:d===undefined?null:d});return o}
-function tree(rows){if(!rows.length)return null;const R={};rows.slice().sort((a,b)=>a.path.split('/').length-b.path.split('/').length).forEach(({path,data})=>{if(data==null)return;const s=path.split('/');let o=R;for(let i=0;i<s.length-1;i++){if(o[s[i]]==null||typeof o[s[i]]!='object')o[s[i]]={};o=o[s[i]]}const k=s[s.length-1],pr=o[k];o[k]=(data&&typeof data=='object'&&!Array.isArray(data)&&pr&&typeof pr=='object'&&!Array.isArray(pr))?{...pr,...data}:data});return R}
-function sbEvt(path,data){const p=path.split('/');if(ITEM_KEYS.includes(p[0])&&p.length==2){const k=p[0],i=+p[1];if(data==null)return;if(S[k]&&S[k][i]){Object.keys(data).forEach(f=>onRemote('/'+path+'/'+f,data[f]));return}data={...data,sx:{}}}onRemote('/'+path,data)}
+function tree(rows){rows=rows.filter(r=>!/^ops\//.test(r.path)).flatMap(r=>LOGS.includes(r.path)&&Array.isArray(r.data)?r.data.map(e=>({path:r.path+'/'+lid(e),data:e})):[r]);if(!rows.length)return null;const R={};rows.slice().sort((a,b)=>a.path.split('/').length-b.path.split('/').length).forEach(({path,data})=>{if(data==null)return;const s=path.split('/');let o=R;for(let i=0;i<s.length-1;i++){if(o[s[i]]==null||typeof o[s[i]]!='object')o[s[i]]={};o=o[s[i]]}const k=s[s.length-1],pr=o[k];o[k]=(data&&typeof data=='object'&&!Array.isArray(data)&&pr&&typeof pr=='object'&&!Array.isArray(pr))?{...pr,...data}:data});LOGS.forEach(k=>{if(R[k]&&!Array.isArray(R[k]))R[k]=Object.values(R[k]).sort((a,b)=>(a.ts||0)-(b.ts||0))});return R}
+function sbEvt(path,data){const p=path.split('/');if(p[0]=='ops')return;if(LOGS.includes(p[0])&&p.length==2){if(data==null)return;const k=p[0],St=lg[k]=lg[k]||new Set();if(St.has(p[1]))return;St.add(p[1]);if(!S[k].some(e=>lid(e)==p[1])){S[k].push(data);S[k].sort((a,b)=>(a.ts||0)-(b.ts||0));persist();clearTimeout(sbEvt.t);sbEvt.t=setTimeout(refresh,250)}return}if(ITEM_KEYS.includes(p[0])&&p.length==2){const k=p[0],i=+p[1];if(data==null)return;if(S[k]&&S[k][i]){Object.keys(data).forEach(f=>onRemote('/'+path+'/'+f,data[f]));return}data={...data,sx:{}}}onRemote('/'+path,data)}
 async function fbReq(m,p,d){if(!FB.url||!SBC)return true;try{p=cl(p);const T=()=>SBC.from(TB),ck=r=>{if(r.error)throw r.error};
  if(d&&d['.sv']){ck(await SBC.rpc('erp_inc',{p_path:p,p_delta:d['.sv'].increment}));return true}
+ if(m=='PUT'&&LOGS.includes(p)){const Sx=lg[p]=lg[p]||new Set(),nw=arr(d).filter(e=>e&&typeof e=='object').map(e=>({id:lid(e),e})).filter(x=>!Sx.has(x.id));for(let i=0;i<nw.length;i+=200){const c=nw.slice(i,i+200);ck(await T().upsert(c.map(x=>({path:p+'/'+x.id,data:x.e})),{onConflict:'path'}));c.forEach(x=>Sx.add(x.id))}return true}
  if(m=='DELETE'){ck(await(p===''?T().delete().neq('path',''):T().delete().eq('path',p)));if(p!=='')ck(await T().delete().like('path',lk(p)+'/%'));return true}
  let rows;const s=p.split('/');
  if(m=='PATCH'&&ITEM_KEYS.includes(s[0])&&s.length==2)rows=[{path:p,data:Object.fromEntries(Object.entries(d||{}).filter(([,v])=>v!==undefined))}];
@@ -144,8 +156,8 @@ async function fbReq(m,p,d){if(!FB.url||!SBC)return true;try{p=cl(p);const T=()=
  else{ck(await(p===''?T().delete().neq('path',''):T().delete().like('path',lk(p)+'/%')));rows=flat(p,d)}
  for(let i=0;i<rows.length;i+=200)ck(await T().upsert(rows.slice(i,i+200),{onConflict:'path'}));return true}
  catch(e){console.warn('Supabase:',e&&e.message||e);setStat('● Sin conexión (reintentando)','#dc2626');return false}}
-async function loadAll(){const o=[];for(let f=0;;f+=1000){const r=await SBC.from(TB).select('path,data,updated_at').order('path').range(f,f+999);if(r.error)throw r.error;o.push(...r.data);if(r.data.length<1000)break}return o}
-function inc(k,i,d,b){if(!FB.url||!d||!FB.has[k])return;fbReq('PUT','/'+k+'/'+i+'/sx/'+(b||BR),{'.sv':{increment:d}})}
+async function loadAll(){const o=[];for(let f=0;;f+=1000){const r=await SBC.from(TB).select('path,data,updated_at').nlike('path','ops/%').order('path').range(f,f+999);if(r.error)throw r.error;o.push(...r.data);if(r.data.length<1000)break}return o}
+function inc(k,i,d,b){if(!FB.url||!d||(FB.ready&&!FB.has[k]))return;IQ.push({p:k+'/'+i+'/sx/'+(b||BR),d,o:Date.now().toString(36)+Math.random().toString(36).slice(2,9)});sq();flushInc()}
 function push(){if(!FB.url||!FB.ready)return;
  SYNC_KEYS.forEach(k=>{const s=JSON.stringify(S[k]);if(FB.last[k]!==s){FB.last[k]=s;fbReq('PUT','/'+k,S[k]).then(ok=>{if(!ok)FB.last[k]=undefined})}});
  ITEM_KEYS.forEach(k=>{const F=FB.items[k]||(FB.items[k]=[]);
@@ -174,10 +186,10 @@ function refresh(){if(!U||!document.getElementById('mn')||!$('#ov').hidden)retur
 let SBlast='';
 async function startSync(){if(!FB.url)return;if(!SBC){setStat('● Faltan URL o clave (use «Conexión a la nube»)','#dc2626');return}setStat('● Conectando…','#a16207');
  if(FB.em){try{const a=await SBC.auth.signInWithPassword({email:FB.em,password:FB.pw});if(a.error)throw a.error}catch(e){console.warn('Supabase auth:',e&&e.message||e);setStat('● Usuario o contraseña de la nube incorrectos','#dc2626');return setTimeout(startSync,15000)}}
- try{const rows=await loadAll();SBlast=rows.reduce((a,r)=>r.updated_at>a?r.updated_at:a,'');onRemote('',tree(rows))}catch(e){console.warn('Supabase:',e&&e.message||e);setStat(e&&(e.code=='PGRST205'||e.code=='42P01')?'● Falta ejecutar supabase.sql en Supabase':e&&(e.code=='401'||e.code=='403'||e.code=='42501')?'● Sin permiso: ejecute supabase.sql o revise la clave':'● Sin conexión (reintentando)','#dc2626');return setTimeout(startSync,10000)}
+ try{const rows=await loadAll();SBlast=rows.reduce((a,r)=>r.updated_at>a?r.updated_at:a,'');rows.forEach(r=>{const q=r.path.split('/');if(LOGS.includes(q[0])&&q.length==2)(lg[q[0]]=lg[q[0]]||new Set()).add(q[1])});for(const r of rows.filter(r=>LOGS.includes(r.path)&&Array.isArray(r.data))){await fbReq('PUT','/'+r.path,r.data);await SBC.from(TB).delete().eq('path',r.path)}const T0=tree(rows);if(T0)LOGS.forEach(k=>{const m=new Map();[...(S[k]||[]),...arr(T0[k])].forEach(e=>{if(e&&typeof e=='object')m.set(lid(e),e)});T0[k]=[...m.values()].sort((a,b)=>(a.ts||0)-(b.ts||0))});else{IQ.length=0;sq()}onRemote('',T0);LOGS.forEach(k=>{FB.last[k]=undefined});push();flushInc()}catch(e){console.warn('Supabase:',e&&e.message||e);setStat(e&&(e.code=='PGRST205'||e.code=='42P01')?'● Falta ejecutar supabase.sql en Supabase':e&&(e.code=='401'||e.code=='403'||e.code=='42501')?'● Sin permiso: ejecute supabase.sql o revise la clave':'● Sin conexión (reintentando)','#dc2626');return setTimeout(startSync,10000)}
  setStat('● En línea · sincronizado','#16a34a');
  try{if(window.supabase){const rc=window.supabase.createClient(FB.url,FB.key,{auth:{persistSession:false}});if(SBC.token())rc.realtime.setAuth(SBC.token());rc.channel('erp').on('postgres_changes',{event:'*',schema:'public',table:TB},pl=>{const r=pl.eventType=='DELETE'?{path:pl.old&&pl.old.path,data:null}:pl.new;if(r&&r.path)sbEvt(r.path,r.data)}).subscribe()}}catch(e){}
- setInterval(async()=>{try{const r=await SBC.from(TB).select('path,data,updated_at').gt('updated_at',SBlast).order('updated_at').limit(500);if(r.error)throw r.error;r.data.forEach(x=>{sbEvt(x.path,x.data);if(x.updated_at>SBlast)SBlast=x.updated_at});setStat('● En línea · sincronizado','#16a34a')}catch(e){setStat('● Sin conexión (reintentando)','#dc2626')}},5000);
+ setInterval(async()=>{try{flushInc();const r=await SBC.from(TB).select('path,data,updated_at').nlike('path','ops/%').gt('updated_at',SBlast).order('updated_at').limit(500);if(r.error)throw r.error;r.data.forEach(x=>{sbEvt(x.path,x.data);if(x.updated_at>SBlast)SBlast=x.updated_at});setStat('● En línea · sincronizado','#16a34a')}catch(e){setStat('● Sin conexión (reintentando)','#dc2626')}},5000);
  setInterval(push,15000)}
 
 async function init(){
@@ -2262,6 +2274,38 @@ V.cocina=function(){const c=CC(),adm=U.r=='Administrador';if(c.modo=='Automátic
  <div class="cd"><h4 style="margin-top:0">Entregados y cancelados recientes</h4>${tbl(['Pedido','Tipo','Hora','Estado'],rec.map(v=>[pad(v),tipoV(v),hm(v.ts),`<span class="bg ${est(v)=='Cancelado'?'r':'o'}">${est(v)}</span>`]))}</div></div>`)};
 setInterval(()=>{try{if(U&&mod=='cocina'&&$('#ov').hidden&&!/INPUT|SELECT|TEXTAREA/.test((document.activeElement||{}).tagName||''))V.cocina()}catch(e){}},30000);
 applyRoles();
+})();
+
+
+// ===================== CONCILIACIÓN DE STOCK · TEMA PREMIUM · VALIDACIÓN DE ENTRADAS =====================
+(()=>{
+setInterval(()=>{try{setStat();if(FB.ready)flushInc()}catch(e){}},3000);
+Object.assign(MODS,{stkaud:'Conciliación de stock'});DESC.stkaud='Stock calculado desde el kardex frente al stock del sistema';IC.stkaud=IC.inv||IC.ops;
+HUBS.find(h=>h.k=='h_inv').ch.push('stkaud');P_OF.stkaud='h_inv';
+[ROLES,ROLES0].forEach(R=>{R.Administrador=[...new Set([...(R.Administrador||[]),'stkaud'])]});['Gerente','Supervisor','Auditor'].forEach(r=>grant(r,['stkaud']));
+// Función pura: stock calculado = inventario base + Σ movimientos del kardex posteriores a la base (sin ajustes de conciliación)
+const calc=()=>{const b=(S.cfg.stkBase||{})[BR],M={};if(b)S.kardex.forEach(e=>{if((e.s||'S01')==BR&&e.ts>b.ts&&!/^Ajuste por conciliación/.test(e.tipo||''))M[e.code]=(M[e.code]||0)+(+e.qty||0)});return{b,M}};
+A.stkBase=()=>{if(U.r!='Administrador')return toast('Solo el Administrador');if(!confirm('¿Fijar el stock actual de '+sname(BR)+' como inventario base? Desde ahora: stock calculado = base + movimientos del kardex.'))return;const q={};S.insumos.forEach(i=>q[i.code]=+(i.sx||{})[BR]||0);(S.cfg.stkBase=S.cfg.stkBase||{})[BR]={ts:Date.now(),by:U.u,q};aud('Inventario base fijado',sname(BR)+' · '+S.insumos.length+' insumos');save();V.stkaud()};
+A.stkAdj=i=>{if(U.r!='Administrador')return toast('Solo el Administrador');const{b,M}=calc();if(!b)return;const x=S.insumos[i],c=+((+b.q[x.code]||0)+(M[x.code]||0)).toFixed(4),o=+(x.sx||{})[BR]||0,d=+(c-o).toFixed(4);if(!d)return;x.stock=c;inc('insumos',i,d);S.kardex.push({s:BR,ts:Date.now(),code:x.code,name:x.name,tipo:'Ajuste por conciliación',qty:d,u:U.u});aud('Conciliación de stock',x.name+': '+nn(o)+' → '+nn(c)+' '+x.unit+' · '+sname(BR),'Conciliación automática');save()};
+A.stkAll=()=>{if(!confirm('¿Ajustar TODOS los insumos con diferencia al stock calculado?'))return;S.insumos.forEach((x,i)=>A.stkAdj(i));V.stkaud()};
+V.stkaud=function(){const{b,M}=calc(),adm=U.r=='Administrador',R=S.insumos.map((x,i)=>{const o=+(x.sx||{})[BR]||0,mv=+(M[x.code]||0),c=b?+((+b.q[x.code]||0)+mv).toFixed(4):null;return{x,i,o,mv,c,d:c==null?null:+(o-c).toFixed(4)}}),bad=R.filter(r=>r.d&&Math.abs(r.d)>.0001);
+ main(tb('Conciliación de stock',(adm?'<button class="btn" onclick="A.stkBase()">Fijar inventario base</button>':'')+(adm&&bad.length?'<button class="btn r" onclick="A.stkAll()">Ajustar todo ('+bad.length+')</button>':''))+`<div class="cd">Stock calculado = inventario base + compras e ingresos − ventas y salidas del kardex · ${esc(sname(BR))}. ${b?'Base fijada el '+fd(b.ts)+' por '+esc(b.by)+'.':'<b>Aún no hay inventario base:</b> pulse «Fijar inventario base» cuando el stock del sistema sea el correcto.'}</div><div class="gr">${GK('Insumos con diferencia',bad.length,'Sistema ≠ calculado',bad.length?'var(--er)':'var(--ok)')}</div>`+tbl(['Código','Insumo','Base','Movimientos','Calculado','Sistema','Diferencia',''],R.map(r=>[esc(r.x.code),esc(r.x.name),b?nn(+b.q[r.x.code]||0):'—',nn(r.mv),r.c==null?'—':nn(r.c),nn(r.o),r.d==null?'—':`<b style="color:${Math.abs(r.d)>.0001?'var(--er)':'var(--ok)'}">${nn(r.d)}</b>`,adm&&r.d&&Math.abs(r.d)>.0001?`<button class="btn g s" onclick="A.stkAdj(${r.i});V.stkaud()">Ajustar</button>`:''])))};
+// Tema Dark Premium (solo variables y estilos: no altera la lógica)
+const st=document.createElement('style');st.textContent=`
+:root:not([data-theme="light"]){--bg:#090d16;--cd:rgba(14,19,34,.72);--tx:#e8edf7;--mu:#8b98b3;--bd:#1e293b;--pr:#3b82f6;--ac:#f59e0b;--ok:#10b981;--er:#ef4444;--gl:rgba(9,13,22,.78);--shd:0 8px 30px rgba(0,0,0,.35)}
+body{font-family:Inter,"SF Pro Display",Roboto,system-ui,-apple-system,"Segoe UI",sans-serif}
+:root:not([data-theme="light"]) body{background:radial-gradient(1200px 600px at 80% -10%,rgba(59,130,246,.12),transparent),radial-gradient(900px 500px at -10% 110%,rgba(16,185,129,.08),transparent),#090d16}
+:root:not([data-theme="light"]) .cd,:root:not([data-theme="light"]) .hero{background:var(--cd);border:1px solid var(--bd);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:var(--shd)}
+.btn,.chip,.cd,input,select,textarea,.bg{transition:all .3s ease-in-out}
+.btn:hover{transform:translateY(-1px);box-shadow:0 0 0 1px var(--pr),0 8px 24px rgba(59,130,246,.3)}.btn:active{transform:translateY(0) scale(.98)}
+@keyframes gcUp{from{opacity:.0;transform:translateY(8px)}to{opacity:1;transform:none}}
+#mn .cd{animation:gcUp .3s ease-out both}
+@media(max-width:700px){.btn{min-height:48px;font-size:16px}input,select,textarea{min-height:46px;font-size:16px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}`;document.head.appendChild(st);
+// Validación: sin negativos, sin exponentes ni valores absurdos en campos numéricos (salvo ajustes/correcciones)
+const okNeg=t=>{const c=((t.closest('label,.fr,.row,div')||{}).textContent||'').slice(0,240);return /ajuste|correc|corrig|diferenc|variaci|\+\/-|inventario f/i.test(c)||(t.min!==''&&+t.min<0)};
+document.addEventListener('keydown',e=>{const t=e.target;if(t&&t.tagName=='INPUT'&&t.type=='number'&&['-','+','e','E'].includes(e.key)&&!okNeg(t))e.preventDefault()},true);
+document.addEventListener('input',e=>{const t=e.target;if(t&&t.tagName=='INPUT'&&t.type=='number'&&t.value!==''){const v=+t.value;if(!isFinite(v)||Math.abs(v)>1e9||(v<0&&!okNeg(t))){t.value='';toast('Valor no permitido: use solo números positivos')}}},true);
 })();
 
 applyRoles();
