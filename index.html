@@ -99,7 +99,7 @@ let BR='S01',VW='S01';
 const bid=x=>{const s=x.s||x.suc;return !s||s=='Juliaca'?'S01':s},sname=id=>((S.sucs||[]).find(s=>s.id==id)||{name:id}).name,chk=()=>VW=='ALL'?(toast('Elija una sucursal (no Consolidado) para operar'),1):0;
 let S,U,mod='dash',P={quick:true,cart:[],cat:'Todas',q:'',pay:'Efectivo',recv:'',desc:'',cli:'',obs:''};
 async function hash(p){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('gc:'+p));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}catch(e){return'p:'+p}}
-const persist=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
+const persist=()=>{if(window.__rst)return;try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
 const save=()=>{persist();push();syncKick()};
 // ===== SINCRONIZACIÓN EN TIEMPO REAL · Supabase (Postgres + Realtime) =====
 // La conexión se configura desde «Conexión a la nube» (no escriba claves en este archivo si el repositorio es público)
@@ -130,39 +130,48 @@ const TB='erp_nodes',cl=p=>String(p||'').replace(/^\/+|\/+$/g,''),lk=s=>s.replac
 // ===================== GIANCORP · NÚCLEO DE SINCRONIZACIÓN (concurrencia + offline) =====================
 // 1) Bitácoras (kardex, auditoría...) = una fila por movimiento en erp_nodes.data (jamás se pisa un array completo).
 // 2) Stock = incrementos atómicos con ID de operación (idempotentes) y cola persistente si no hay red (pending_sync).
-const LOGS=['kardex','audit','synclog','qrlog','rptlog'],lg={};
+const LOGS=['kardex','audit','synclog','qrlog','rptlog','sxlog'],lg={};SYNC_KEYS.push('sxlog');
 const hs=x=>{let h=5381;for(let i=0;i<x.length;i++)h=((h<<5)+h+x.charCodeAt(i))>>>0;return h.toString(36)},lid=e=>((e&&e.ts)||0)+'_'+hs(JSON.stringify(e));
 const IQ=(()=>{try{return JSON.parse(localStorage.getItem('giandy_incq')||'[]')}catch(e){return[]}})(),sq=()=>{try{localStorage.setItem('giandy_incq',JSON.stringify(IQ))}catch(e){}};
-let flushing=false;
-async function flushInc(){if(flushing||!SBC||!FB.ready)return;flushing=true;try{while(IQ.length){const x=IQ[0],r=await SBC.rpc('erp_inc',{p_path:x.p,p_delta:x.d,p_op:x.o});if(r.error){console.warn('Cola de stock:',r.error.message);break}IQ.shift();sq()}}catch(e){}finally{flushing=false;setStat()}}
-function pendTxt(){try{const n=IQ.length+S.ventas.filter(v=>!FB.sent[v.id]).length;return n?' · '+n+' pendiente'+(n>1?'s':'')+' de enviar':''}catch(e){return''}}
+// ---- LIBRO DE STOCK (sxlog): Stock = base en la nube + Σ movimientos. Cada movimiento es una fila única e idempotente ----
+const PS=new Set(),SXS=new Map(),ap=new Set();let seq=0;
+async function flushInc(){} // compatibilidad: el stock ya no usa RPC; viaja como bitácora sxlog (se reintenta solo)
+function pendTxt(){try{const n=PS.size+S.ventas.filter(v=>!FB.sent[v.id]).length;return n?' · '+n+' pendiente'+(n>1?'s':'')+' de enviar':''}catch(e){return''}}
+const sxFind=(k,c)=>(S[k]||[]).find(x=>(x.code||x.name)==c);
+const sxAdd=e=>{const key=e.k+':'+e.c+'|'+e.b;SXS.set(key,+((SXS.get(key)||0)+e.d).toFixed(4))};
+function sxRemote(e){const id=lid(e);if(ap.has(id))return;ap.add(id);sxAdd(e);const x=sxFind(e.k,e.c);if(x){x.sx=x.sx||{};x.sx[e.b]=+((+x.sx[e.b]||0)+e.d).toFixed(4)}}
+function sxRebuild(apply){SXS.clear();ap.clear();(S.sxlog||[]).forEach(e=>{ap.add(lid(e));sxAdd(e)});if(!apply)return;SXS.forEach((v,key)=>{const m=/^([a-z]+):(.*)\|([^|]+)$/.exec(key),x=m&&sxFind(m[1],m[2]);if(x){x.sx=x.sx||{};x.sx[m[3]]=+((+x.sx[m[3]]||0)+v).toFixed(4)}})}
+const baseSx=(k,x)=>{const sx={};Object.entries(x.sx||{}).forEach(([b,v])=>sx[b]=+((+v||0)-(SXS.get(k+':'+(x.code||x.name)+'|'+b)||0)).toFixed(4));return{...x,sx,stock:undefined}};
+function rstCheck(d){if(!d||!d.id)return false;const c=localStorage.getItem('giandy_rst');if(c===d.id)return false;window.__rst=1;FB.ready=false;try{localStorage.setItem('giandy_rst',d.id);localStorage.removeItem('giandy_incq');if(d.soft){const o=JSON.parse(localStorage.getItem(K)||'null');if(o){o.sxlog=[];localStorage.setItem(K,JSON.stringify(o))}}else localStorage.removeItem(K)}catch(e){}location.reload();return true}
 function flat(p,d){const o=[],s=p?p.split('/'):[],k=s[0],n=s.length;
  const item=(q,x)=>{if(x==null)return;const{sx,stock,...r}=x;o.push({path:q,data:r});Object.entries(sx||{}).forEach(([b,v])=>o.push({path:q+'/sx/'+b,data:v}))};
- if(!n)Object.entries(d||{}).forEach(([k2,v])=>flat(k2,v).forEach(r=>o.push(r)));
+ if(!n){const sm=new Map();arr((d||{}).sxlog).forEach(e=>{const q=e.k+':'+e.c+'|'+e.b;sm.set(q,(sm.get(q)||0)+e.d)});Object.entries(d||{}).forEach(([k2,v])=>flat(k2,ITEM_KEYS.includes(k2)?arr(v).map(x=>{const sx={};Object.entries(x.sx||{}).forEach(([b,q])=>sx[b]=+((+q||0)-(sm.get(k2+':'+(x.code||x.name)+'|'+b)||0)).toFixed(4));return{...x,sx}}):v).forEach(r=>o.push(r)))}
  else if(ITEM_KEYS.includes(k)&&n==1)Object.entries(d||{}).forEach(([i,x])=>item(k+'/'+i,x));
  else if(ITEM_KEYS.includes(k)&&n==2)item(p,d);
  else if(LOGS.includes(k)&&n==1)arr(d).forEach(e=>{if(e&&typeof e=='object')o.push({path:k+'/'+lid(e),data:e})});
  else if(k=='ventas'&&n==1)Object.values(d||{}).forEach(v=>o.push({path:'ventas/'+v.id,data:v}));
  else o.push({path:p,data:d===undefined?null:d});return o}
 function tree(rows){rows=rows.filter(r=>!/^ops\//.test(r.path)).flatMap(r=>LOGS.includes(r.path)&&Array.isArray(r.data)?r.data.map(e=>({path:r.path+'/'+lid(e),data:e})):[r]);if(!rows.length)return null;const R={};rows.slice().sort((a,b)=>a.path.split('/').length-b.path.split('/').length).forEach(({path,data})=>{if(data==null)return;const s=path.split('/');let o=R;for(let i=0;i<s.length-1;i++){if(o[s[i]]==null||typeof o[s[i]]!='object')o[s[i]]={};o=o[s[i]]}const k=s[s.length-1],pr=o[k];o[k]=(data&&typeof data=='object'&&!Array.isArray(data)&&pr&&typeof pr=='object'&&!Array.isArray(pr))?{...pr,...data}:data});LOGS.forEach(k=>{if(R[k]&&!Array.isArray(R[k]))R[k]=Object.values(R[k]).sort((a,b)=>(a.ts||0)-(b.ts||0))});return R}
-function sbEvt(path,data){const p=path.split('/');if(p[0]=='ops')return;if(LOGS.includes(p[0])&&p.length==2){if(data==null)return;const k=p[0],St=lg[k]=lg[k]||new Set();if(St.has(p[1]))return;St.add(p[1]);if(!S[k].some(e=>lid(e)==p[1])){S[k].push(data);S[k].sort((a,b)=>(a.ts||0)-(b.ts||0));persist();clearTimeout(sbEvt.t);sbEvt.t=setTimeout(refresh,250)}return}if(ITEM_KEYS.includes(p[0])&&p.length==2){const k=p[0],i=+p[1];if(data==null)return;if(S[k]&&S[k][i]){Object.keys(data).forEach(f=>onRemote('/'+path+'/'+f,data[f]));return}data={...data,sx:{}}}onRemote('/'+path,data)}
+function sbEvt(path,data){const p=path.split('/');if(p[0]=='ops')return;if(p[0]=='sys'){if(p[1]=='reset'&&data)rstCheck(data);return}
+ if(LOGS.includes(p[0])&&p.length==2){if(data==null)return;const k=p[0],St=lg[k]=lg[k]||new Set();if(St.has(p[1]))return;St.add(p[1]);S[k]=S[k]||[];if(!S[k].some(e=>lid(e)==p[1])){S[k].push(data);S[k].sort((a,b)=>(a.ts||0)-(b.ts||0));if(k=='sxlog')sxRemote(data);persist();clearTimeout(sbEvt.t);sbEvt.t=setTimeout(refresh,250)}return}
+ if(ITEM_KEYS.includes(p[0])&&p.length==4&&p[2]=='sx'&&data!=null){const x=S[p[0]][+p[1]];if(x)data=+((+data||0)+(SXS.get(p[0]+':'+(x.code||x.name)+'|'+p[3])||0)).toFixed(4)}if(ITEM_KEYS.includes(p[0])&&p.length==2){const k=p[0],i=+p[1];if(data==null)return;if(S[k]&&S[k][i]){Object.keys(data).forEach(f=>onRemote('/'+path+'/'+f,data[f]));return}data={...data,sx:{}}}onRemote('/'+path,data)}
 async function fbReq(m,p,d){if(!FB.url||!SBC)return true;try{p=cl(p);const T=()=>SBC.from(TB),ck=r=>{if(r.error)throw r.error};
  if(d&&d['.sv']){ck(await SBC.rpc('erp_inc',{p_path:p,p_delta:d['.sv'].increment}));return true}
- if(m=='PUT'&&LOGS.includes(p)){const Sx=lg[p]=lg[p]||new Set(),nw=arr(d).filter(e=>e&&typeof e=='object').map(e=>({id:lid(e),e})).filter(x=>!Sx.has(x.id));for(let i=0;i<nw.length;i+=200){const c=nw.slice(i,i+200);ck(await T().upsert(c.map(x=>({path:p+'/'+x.id,data:x.e})),{onConflict:'path'}));c.forEach(x=>Sx.add(x.id))}return true}
+ if(m=='PUT'&&LOGS.includes(p)){const Sx=lg[p]=lg[p]||new Set(),nw=arr(d).filter(e=>e&&typeof e=='object').map(e=>({id:lid(e),e})).filter(x=>!Sx.has(x.id));for(let i=0;i<nw.length;i+=200){const c=nw.slice(i,i+200);ck(await T().upsert(c.map(x=>({path:p+'/'+x.id,data:x.e})),{onConflict:'path'}));c.forEach(x=>{Sx.add(x.id);PS.delete(x.id)})}return true}
  if(m=='DELETE'){ck(await(p===''?T().delete().neq('path',''):T().delete().eq('path',p)));if(p!=='')ck(await T().delete().like('path',lk(p)+'/%'));return true}
  let rows;const s=p.split('/');
  if(m=='PATCH'&&ITEM_KEYS.includes(s[0])&&s.length==2)rows=[{path:p,data:Object.fromEntries(Object.entries(d||{}).filter(([,v])=>v!==undefined))}];
  else if(m=='PATCH'){rows=[];Object.entries(d||{}).forEach(([k,v])=>{if(v!==undefined)flat(p+'/'+k,v).forEach(r=>rows.push(r))})}
  else{ck(await(p===''?T().delete().neq('path',''):T().delete().like('path',lk(p)+'/%')));rows=flat(p,d)}
  for(let i=0;i<rows.length;i+=200)ck(await T().upsert(rows.slice(i,i+200),{onConflict:'path'}));return true}
- catch(e){console.warn('Supabase:',e&&e.message||e);setStat('● Sin conexión (reintentando)','#dc2626');return false}}
+ catch(e){console.warn('Supabase:',e&&e.message||e);FB.err=(e&&e.message)||String(e);setStat('● Error de nube: '+FB.err.slice(0,70)+' (toque aquí para diagnóstico)','#dc2626');return false}}
 async function loadAll(){const o=[];for(let f=0;;f+=1000){const r=await SBC.from(TB).select('path,data,updated_at').nlike('path','ops/%').order('path').range(f,f+999);if(r.error)throw r.error;o.push(...r.data);if(r.data.length<1000)break}return o}
-function inc(k,i,d,b){if(!FB.url||!d||(FB.ready&&!FB.has[k]))return;IQ.push({p:k+'/'+i+'/sx/'+(b||BR),d,o:Date.now().toString(36)+Math.random().toString(36).slice(2,9)});sq();flushInc()}
+function inc(k,i,d,b){d=+d;if(!isFinite(d)||!d)return;const x=S[k]&&S[k][i];if(!x)return;const e={ts:Date.now(),n:++seq,k,c:x.code||x.name,b:b||BR,d:+d.toFixed(4),u:(typeof U!='undefined'&&U&&U.u)||''};(S.sxlog=S.sxlog||[]).push(e);const id=lid(e);ap.add(id);sxAdd(e);PS.add(id);if(FB.ready)setTimeout(push,0)}
 function push(){if(!FB.url||!FB.ready)return;
  SYNC_KEYS.forEach(k=>{const s=JSON.stringify(S[k]);if(FB.last[k]!==s){FB.last[k]=s;fbReq('PUT','/'+k,S[k]).then(ok=>{if(!ok)FB.last[k]=undefined})}});
  ITEM_KEYS.forEach(k=>{const F=FB.items[k]||(FB.items[k]=[]);
-  if(!FB.has[k]){FB.has[k]=1;S[k].forEach((x,i)=>F[i]=strip(x));fbReq('PUT','/'+k,S[k]).then(ok=>{if(!ok)FB.has[k]=0});return}
-  S[k].forEach((x,i)=>{const s=strip(x);if(F[i]!==s){const nw=F[i]===undefined;F[i]=s;fbReq(nw?'PUT':'PATCH','/'+k+'/'+i,nw?x:{...x,stock:undefined,sx:undefined}).then(ok=>{if(!ok)F[i]=undefined})}})});
+  if(!FB.has[k]){FB.has[k]=1;S[k].forEach((x,i)=>F[i]=strip(x));fbReq('PUT','/'+k,S[k].map(x=>baseSx(k,x))).then(ok=>{if(!ok)FB.has[k]=0});return}
+  S[k].forEach((x,i)=>{const s=strip(x);if(F[i]!==s){const nw=F[i]===undefined;F[i]=s;fbReq(nw?'PUT':'PATCH','/'+k+'/'+i,nw?baseSx(k,x):{...x,stock:undefined,sx:undefined}).then(ok=>{if(!ok)F[i]=undefined})}})});
  S.ventas.forEach(v=>{if(!FB.sent[v.id]){FB.sent[v.id]=1;fbReq('PUT','/ventas/'+v.id,v).then(ok=>{if(!ok)delete FB.sent[v.id]})}})}
 function setKey(k,d){let v=d;
  if(d==null&&['users','insumos','productos','recetas'].includes(k))return;
@@ -186,11 +195,14 @@ function refresh(){if(!U||!document.getElementById('mn')||!$('#ov').hidden)retur
 let SBlast='';
 async function startSync(){if(!FB.url)return;if(!SBC){setStat('● Faltan URL o clave (use «Conexión a la nube»)','#dc2626');return}setStat('● Conectando…','#a16207');
  if(FB.em){try{const a=await SBC.auth.signInWithPassword({email:FB.em,password:FB.pw});if(a.error)throw a.error}catch(e){console.warn('Supabase auth:',e&&e.message||e);setStat('● Usuario o contraseña de la nube incorrectos','#dc2626');return setTimeout(startSync,15000)}}
- try{const rows=await loadAll();SBlast=rows.reduce((a,r)=>r.updated_at>a?r.updated_at:a,'');rows.forEach(r=>{const q=r.path.split('/');if(LOGS.includes(q[0])&&q.length==2)(lg[q[0]]=lg[q[0]]||new Set()).add(q[1])});for(const r of rows.filter(r=>LOGS.includes(r.path)&&Array.isArray(r.data))){await fbReq('PUT','/'+r.path,r.data);await SBC.from(TB).delete().eq('path',r.path)}const T0=tree(rows);if(T0)LOGS.forEach(k=>{const m=new Map();[...(S[k]||[]),...arr(T0[k])].forEach(e=>{if(e&&typeof e=='object')m.set(lid(e),e)});T0[k]=[...m.values()].sort((a,b)=>(a.ts||0)-(b.ts||0))});else{IQ.length=0;sq()}onRemote('',T0);LOGS.forEach(k=>{FB.last[k]=undefined});push();flushInc()}catch(e){console.warn('Supabase:',e&&e.message||e);setStat(e&&(e.code=='PGRST205'||e.code=='42P01')?'● Falta ejecutar supabase.sql en Supabase':e&&(e.code=='401'||e.code=='403'||e.code=='42501')?'● Sin permiso: ejecute supabase.sql o revise la clave':'● Sin conexión (reintentando)','#dc2626');return setTimeout(startSync,10000)}
- setStat('● En línea · sincronizado','#16a34a');
- try{if(window.supabase){const rc=window.supabase.createClient(FB.url,FB.key,{auth:{persistSession:false}});if(SBC.token())rc.realtime.setAuth(SBC.token());rc.channel('erp').on('postgres_changes',{event:'*',schema:'public',table:TB},pl=>{const r=pl.eventType=='DELETE'?{path:pl.old&&pl.old.path,data:null}:pl.new;if(r&&r.path)sbEvt(r.path,r.data)}).subscribe()}}catch(e){}
- setInterval(async()=>{try{flushInc();const r=await SBC.from(TB).select('path,data,updated_at').nlike('path','ops/%').gt('updated_at',SBlast).order('updated_at').limit(500);if(r.error)throw r.error;r.data.forEach(x=>{sbEvt(x.path,x.data);if(x.updated_at>SBlast)SBlast=x.updated_at});setStat('● En línea · sincronizado','#16a34a')}catch(e){setStat('● Sin conexión (reintentando)','#dc2626')}},5000);
- setInterval(push,15000)}
+ try{const rows=await loadAll();SBlast=rows.reduce((a,r)=>r.updated_at>a?r.updated_at:a,'');rows.forEach(r=>{const q=r.path.split('/');if(LOGS.includes(q[0])&&q.length==2)(lg[q[0]]=lg[q[0]]||new Set()).add(q[1])});for(const r of rows.filter(r=>LOGS.includes(r.path)&&Array.isArray(r.data))){await fbReq('PUT','/'+r.path,r.data);await SBC.from(TB).delete().eq('path',r.path)}const rs=rows.find(r=>r.path=='sys/reset');if(rs&&rstCheck(rs.data))return;S.sxlog=S.sxlog||[];IQ.splice(0).forEach(q=>{const a=q.p.split('/'),x=S[a[0]]&&S[a[0]][+a[1]];if(x)S.sxlog.push({ts:Date.now(),n:++seq,k:a[0],c:x.code||x.name,b:a[3],d:q.d,u:'cola'})});sq();const T0=tree(rows);if(T0)LOGS.forEach(k=>{const m=new Map();[...(S[k]||[]),...arr(T0[k])].forEach(e=>{if(e&&typeof e=='object')m.set(lid(e),e)});T0[k]=[...m.values()].sort((a,b)=>(a.ts||0)-(b.ts||0))});else{IQ.length=0;sq()}if(T0){onRemote('',T0);sxRebuild(true)}else{sxRebuild(false);onRemote('',null)}LOGS.forEach(k=>{FB.last[k]=undefined});S.sxlog.forEach(e=>{const id=lid(e);if(!(lg.sxlog&&lg.sxlog.has(id)))PS.add(id)});push()}catch(e){console.warn('Supabase:',e&&e.message||e);setStat(e&&(e.code=='PGRST205'||e.code=='42P01')?'● Falta ejecutar supabase.sql en Supabase':e&&(e.code=='401'||e.code=='403'||e.code=='42501')?'● Sin permiso: ejecute supabase.sql o revise la clave':'● Sin conexión (reintentando)','#dc2626');return setTimeout(startSync,10000)}
+ startLive()}
+let SBpoll,SBpush,SBrc;
+function stopLive(){clearInterval(SBpoll);clearInterval(SBpush);try{if(SBrc){SBrc.removeAllChannels();SBrc=null}}catch(e){}}
+function startLive(){stopLive();setStat('● En línea · sincronizado','#16a34a');
+ try{if(window.supabase){SBrc=window.supabase.createClient(FB.url,FB.key,{auth:{persistSession:false}});if(SBC.token())SBrc.realtime.setAuth(SBC.token());SBrc.channel('erp').on('postgres_changes',{event:'*',schema:'public',table:TB},pl=>{const r=pl.eventType=='DELETE'?{path:pl.old&&pl.old.path,data:null}:pl.new;if(r&&r.path)sbEvt(r.path,r.data)}).subscribe()}}catch(e){}
+ const pl=async()=>{try{const r=await SBC.from(TB).select('path,data,updated_at').nlike('path','ops/%').gt('updated_at',SBlast).order('updated_at').limit(500);if(r.error)throw r.error;r.data.forEach(x=>{sbEvt(x.path,x.data);if(x.updated_at>SBlast)SBlast=x.updated_at});setStat('● En línea · sincronizado','#16a34a')}catch(e){FB.err=(e&&e.message)||String(e);setStat('● Sin conexión (reintentando)','#dc2626')}};
+ SBpoll=setInterval(pl,5000);SBpush=setInterval(push,15000);pl()}
 
 async function init(){
  try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
@@ -2306,6 +2318,23 @@ body{font-family:Inter,"SF Pro Display",Roboto,system-ui,-apple-system,"Segoe UI
 const okNeg=t=>{const c=((t.closest('label,.fr,.row,div')||{}).textContent||'').slice(0,240);return /ajuste|correc|corrig|diferenc|variaci|\+\/-|inventario f/i.test(c)||(t.min!==''&&+t.min<0)};
 document.addEventListener('keydown',e=>{const t=e.target;if(t&&t.tagName=='INPUT'&&t.type=='number'&&['-','+','e','E'].includes(e.key)&&!okNeg(t))e.preventDefault()},true);
 document.addEventListener('input',e=>{const t=e.target;if(t&&t.tagName=='INPUT'&&t.type=='number'&&t.value!==''){const v=+t.value;if(!isFinite(v)||Math.abs(v)>1e9||(v<0&&!okNeg(t))){t.value='';toast('Valor no permitido: use solo números positivos')}}},true);
+})();
+
+// ===================== STOCK PUBLICADO · REINICIO TOTAL · DIAGNÓSTICO · CICLO DE VIDA =====================
+(()=>{
+document.addEventListener('visibilitychange',()=>{if(!FB.url||!SBC||!FB.ready)return;if(document.hidden)stopLive();else startLive()});
+window.addEventListener('pagehide',stopLive);
+document.addEventListener('click',e=>{if(e.target&&e.target.id=='st')A.diag()});
+A.diag=async()=>{if(!SBC)return alert('No hay conexión configurada. Use «Conexión a la nube».');const o=[],t=async(n,f)=>{try{const r=await f();o.push((r&&r.error?'✗ ':'✓ ')+n+(r&&r.error?': '+r.error.message+' ('+r.error.code+')':''))}catch(e){o.push('✗ '+n+': '+(e.message||e))}};
+ await t('Leer tabla erp_nodes',()=>SBC.from(TB).select('path').limit(1));await t('Escribir en la nube',()=>SBC.from(TB).upsert([{path:'sys/diag',data:{ts:Date.now()}}],{onConflict:'path'}));await t('Borrar prueba',()=>SBC.from(TB).delete().eq('path','sys/diag'));
+ o.push('Movimientos de stock locales: '+(S.sxlog||[]).length);o.push('Pendientes de enviar: '+(PS.size+S.ventas.filter(v=>!FB.sent[v.id]).length));o.push('Último error: '+(FB.err||'ninguno'));alert('Diagnóstico de nube\n\n'+o.join('\n'))};
+A.stkPub=()=>{if(U.r!='Administrador')return toast('Solo el Administrador');if(!SBC)return toast('Conecte la nube primero');if(!confirm('¿Publicar el stock de ESTE equipo como stock oficial en la nube? Los demás equipos se recargarán y quedarán iguales a este.'))return;(async()=>{try{const rows=[];ITEM_KEYS.forEach(k=>S[k].forEach((x,i)=>Object.entries(x.sx||{}).forEach(([b,v])=>rows.push({path:k+'/'+i+'/sx/'+b,data:+v||0}))));for(let i=0;i<rows.length;i+=200){const r=await SBC.from(TB).upsert(rows.slice(i,i+200),{onConflict:'path'});if(r.error)throw r.error}
+ let r=await SBC.from(TB).delete().like('path','sxlog/%');if(r.error)throw r.error;const id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);r=await SBC.from(TB).upsert([{path:'sys/reset',data:{id,ts:Date.now(),by:U.u,soft:1}}],{onConflict:'path'});if(r.error)throw r.error;
+ aud('Stock publicado a la nube',sname(BR)+' · '+rows.length+' valores');S.sxlog=[];PS.clear();lg.sxlog=new Set();sxRebuild(false);persist();localStorage.setItem('giandy_rst',id);toast('Stock publicado: los demás equipos se actualizarán');V.stkaud()}catch(e){alert('No se pudo publicar: '+(e.message||e))}})()};
+A.hardReset=()=>{if(U.r!='Administrador')return toast('Solo el Administrador');modal('Reiniciar sistema desde cero',[{k:'w',l:'Se borra TODO (ventas, inventario, caja, usuarios) en la nube y en todos los equipos conectados. Antes se descarga un respaldo. Escriba exactamente: REINICIAR_SISTEMA'}],d=>{if((d.w||'').trim()!='REINICIAR_SISTEMA')return toast('Palabra incorrecta: no se reinició nada');(async()=>{try{await dlj('respaldo_antes_de_reiniciar_'+new Date().toISOString().slice(0,10),S);if(SBC){const a=await SBC.from(TB).delete().neq('path','');if(a.error)throw a.error;const id=Date.now().toString(36)+Math.random().toString(36).slice(2,6),b=await SBC.from(TB).upsert([{path:'sys/reset',data:{id,ts:Date.now(),by:U.u}}],{onConflict:'path'});if(b.error)throw b.error;localStorage.setItem('giandy_rst',id)}window.__rst=1;FB.ready=false;localStorage.removeItem(K);localStorage.removeItem('giandy_incq');alert('Sistema reiniciado. Se recargará con los datos de fábrica.');location.reload()}catch(e){alert('No se pudo reiniciar: '+(e.message||e))}})()})};
+const _resp=V.resp;V.resp=function(){const r=_resp.apply(this,arguments);if(U.r=='Administrador'){try{$('#mn').insertAdjacentHTML('beforeend','<div class="cd" style="margin-top:12px;border-color:var(--er)"><h3 style="margin-top:0">Reinicio total corporativo</h3><p style="color:var(--mu)">Deja el sistema en cero en la nube y en todos los equipos. Pide una palabra clave de seguridad y descarga antes un respaldo.</p><button class="btn r" onclick="A.hardReset()">Reiniciar sistema desde cero</button></div>')}catch(e){}}return r};
+const _sa=V.stkaud;V.stkaud=function(){const r=_sa.apply(this,arguments);if(U.r=='Administrador'){try{$('#mn').insertAdjacentHTML('beforeend','<div class="cd" style="margin-top:12px"><h3 style="margin-top:0">Stock oficial en la nube</h3><p style="color:var(--mu)">Si los equipos muestran stocks distintos, elija el equipo que tiene el stock correcto y publíquelo: los demás se igualan.</p><button class="btn" onclick="A.stkPub()">Publicar stock de este equipo</button> <button class="btn g" onclick="A.diag()">Diagnóstico de nube</button></div>')}catch(e){}}return r};
+const st2=document.createElement('style');st2.textContent='.cd:hover{border-color:rgba(59,130,246,.45)!important;box-shadow:0 0 24px rgba(59,130,246,.15)}';document.head.appendChild(st2);
 })();
 
 applyRoles();
