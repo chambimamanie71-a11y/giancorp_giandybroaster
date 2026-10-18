@@ -159,7 +159,9 @@ let BR='S01',VW='S01';
 const bid=x=>{const s=x.s||x.suc;return !s||s=='Juliaca'?'S01':s},sname=id=>((S.sucs||[]).find(s=>s.id==id)||{name:id}).name,chk=()=>VW=='ALL'?(toast('Elija una sucursal (no Consolidado) para operar'),1):0;
 let S,U,mod='dash',P={quick:true,cart:[],cat:'Todas',q:'',pay:'Efectivo',recv:'',desc:'',cli:'',obs:''};
 async function hash(p){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('gc:'+p));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}catch(e){return'p:'+p}}
-const persist=()=>{if(window.__rst)return;try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
+const persist=()=>{if(window.__rst)return;try{const j=JSON.stringify(S);if(j===persist.l)return;persist.l=j;window.__DIRTY=(window.__DIRTY|0)+1;localStorage.setItem(K,j)}catch(e){}};
+/* Clave de estado de pantalla: si no cambió ningún dato, la sucursal, la vista ni el día, no hace falta repintar */
+function paintKey(){try{return(window.__DIRTY|0)+'|'+mod+'|'+BR+'|'+VW+'|'+(typeof TT!=='undefined'?TT.m+'/'+TT.a+'/'+TT.b:'')+'|'+new Date().toDateString()+'|'+(U?U.u:'')+'|'+(mod=='pos'?JSON.stringify(P):'')}catch(e){return'x'+Math.random()}}
 const save=()=>{try{stampNew()}catch(e){console.warn('vínculo:',e)}persist();push();syncKick()};
 // ===== SINCRONIZACIÓN EN TIEMPO REAL · Supabase (Postgres + Realtime) =====
 // La conexión se configura desde «Conexión a la nube» (no escriba claves en este archivo si el repositorio es público)
@@ -168,7 +170,7 @@ const FB={url:(_sbc.url||SB_URL_DEFAULT).trim().replace(/\/+$/,''),key:(_sbc.key
 const SYNC_KEYS=['users','recetas','kardex','cajas','sucs','transf','clientes','provs','cfg','audit','mermas','gastos','compras','anuladas','trab','turnos','asist','accesos','nomv','sueldos','bmov','cxp','cxpp','presup','promos','fondos','fmov','frules','activos','qrlog','crec','ingx','asreq','calev','rptlog','rechist','recver','prodplan','synclog','aprob','lotes','phist','cierres','cfgver'],ITEM_KEYS=['insumos','productos'];
 const arr=x=>Array.isArray(x)?x:(x?Object.values(x):[]),strip=x=>JSON.stringify({...x,stock:undefined,sx:undefined}),fixV=v=>({...v,items:arr(v.items),cons:arr(v.cons)});
 const fbu=p=>FB.url+'/erp'+p+'.json';
-function setStat(t,c){if(t){FB.t=t;FB.c=c}const e=document.getElementById('st');if(e){e.textContent=FB.url?((FB.t||'● Conectando…')+pendTxt()):'● Modo local (sin nube)';e.style.color=FB.url&&FB.c?FB.c:'var(--mu)'}}
+function setStat(t,c){if(t){FB.t=t;FB.c=c}const e=document.getElementById('st');if(e){const x=FB.url?((FB.t||'● Conectando…')+pendTxt()):'● Modo local (sin nube)',cc=FB.url&&FB.c?FB.c:'var(--mu)';if(e._x!==x){e._x=x;e.textContent=x}if(e._c!==cc){e._c=cc;e.style.color=cc}}}
 const SBX=()=>{let tok=null,rt=null,exp=0;
  const H=x=>({apikey:FB.key,...((tok||/^eyJ/.test(FB.key))?{Authorization:'Bearer '+(tok||FB.key)}:{}),'Content-Type':'application/json',...x});
  async function auth(){const r=await fetch(FB.url+'/auth/v1/token?grant_type='+(rt?'refresh_token':'password'),{method:'POST',headers:{apikey:FB.key,'Content-Type':'application/json'},body:JSON.stringify(rt?{refresh_token:rt}:{email:FB.em,password:FB.pw})});const j=await r.json().catch(()=>({}));if(!r.ok){rt=null;throw new Error(j.error_description||j.msg||j.message||'HTTP '+r.status)}tok=j.access_token;rt=j.refresh_token;exp=Date.now()+Math.max(60,(j.expires_in||3600)-60)*1000}
@@ -282,7 +284,7 @@ async function init(){
 function login(msg){$('#app').innerHTML=`<div id="lg"><form class="lc" onsubmit="return A.in(event)"><div class="logo" style="font-size:22px">${S.cfg.logo?logoH():'GIAN<b>CORP</b>'}</div><p style="color:var(--mu);margin:2px 0 20px">GIANDY BROASTER · Juliaca, Puno</p><div class="fl"><label>Usuario</label><input id="lu" autocomplete="username" autofocus></div><div class="fl"><label>Contraseña</label><input id="lp" type="password" autocomplete="current-password"></div><p style="color:var(--er);min-height:18px;font-size:12px">${msg||''}</p><button class="btn" style="width:100%">Ingresar</button><div id="st" style="font-size:12px;margin-top:12px;text-align:center"></div><p style="text-align:center;margin:6px 0 0"><a href="#" onclick="A.conn();return false" style="color:var(--mu);font-size:12px">Conexión a la nube</a></p></form></div>`;setStat()}
 function shell(){const ok=ROLES[U.r]||[];if(!ok.includes(mod)&&!HUBK.includes(mod))mod=ok[0];
  $('#app').innerHTML=`<div id="sh"><nav id="sb"><div class="logo" style="padding:6px 12px 14px;font-size:17px">${logoH()}</div>${brSel()}${navHTML(ok)}<div style="flex:1"></div><div id="st" style="padding:4px 12px;font-size:12px"></div><div class="nv" onclick="A.theme()">${ic('moon')} Tema claro / oscuro</div><div class="nv" onclick="A.out()">${ic('logout')} Salir (${esc(U.u)})</div></nav><main id="mn"></main>${bnHTML(ok)}<div id="scrim" onclick="A.drawer(0)"></div></div>`;V[mod]();setStat();uiApply()}
-const SCR={},go=k=>{if(!U)return;if(HUBK.includes(k))k=hubTarget(k);const e=$('#mn');if(e)SCR[mod]=e.scrollTop;mod=k;qrStop();navPush(k);if(document.body&&document.body.classList)document.body.classList.remove('drawer');if(P_OF[k])HUBLAST[P_OF[k]]=k;document.querySelectorAll('.nv[data-k]').forEach(n=>n.classList.toggle('on',n.dataset.k==k));V[k]();navSync();saveUI()},main=h=>{const e=$('#mn'),s=e.scrollTop,same=main.m===mod;main.m=mod;e.innerHTML=hdrHTML()+(mod!='alert'?critBanner():'')+h;e.scrollTop=same?s:(SCR[mod]||0)},tb=(t,x='')=>`<div class="tb"><h2>${t}</h2><div class="rw np">${x}${HUBK.includes(mod)||mod=='home'?'':`<button class="btn g s" onclick="A.exp()">${ic('download',14)} Exportar</button>`}</div></div>`;
+const SCR={},go=k=>{if(!U)return;if(HUBK.includes(k))k=hubTarget(k);const e=$('#mn');if(e)SCR[mod]=e.scrollTop;mod=k;qrStop();navPush(k);if(document.body&&document.body.classList)document.body.classList.remove('drawer');if(P_OF[k])HUBLAST[P_OF[k]]=k;document.querySelectorAll('.nv[data-k]').forEach(n=>n.classList.toggle('on',n.dataset.k==k));V[k]();main.k=paintKey();main.t=Date.now();navSync();saveUI()},main=h=>{const e=$('#mn'),s=e.scrollTop,same=main.m===mod;main.m=mod;main.k=paintKey();main.t=Date.now();e.innerHTML=hdrHTML()+(mod!='alert'?critBanner():'')+h;try{window.NTF&&NTF.bell&&NTF.bell()}catch(x){}e.scrollTop=same?s:(SCR[mod]||0)},tb=(t,x='')=>`<div class="tb"><h2>${t}</h2><div class="rw np">${x}${HUBK.includes(mod)||mod=='home'?'':`<button class="btn g s" onclick="A.exp()">${ic('download',14)} Exportar</button>`}</div></div>`;
 const toast=t=>{const d=document.createElement('div');d.id='tg';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),2600)};
 const MD={h:[],i:-1,f:[]};
 const SUGM={acr:()=>[...S.cxp.map(c=>c.acr),...S.provs.map(p=>p.name)],conc:()=>S.cxp.map(c=>c.conc),c:()=>[...S.gastos.map(g=>g.c),...S.caja.movs.map(m=>m.c),...S.bmov.map(m=>m.c)],resp:()=>S.users.map(u=>u.n||u.u),cargo:()=>S.trab.map(w=>w.cargo),area:()=>S.trab.map(w=>w.area),obs:()=>S.ventas.map(v=>v.obs)};
@@ -2870,6 +2872,18 @@ function curveSvg(lab,s1,s2){const W=640,H=220,pl=46,pr=12,pt=14,pb=26,n=lab.len
 applyRoles();
 
 init();
+/* =====================================================================
+   ESTABILIDAD Y RENDIMIENTO · ZERO FLICKER (aditivo: no cambia ninguna lógica de negocio)
+   - La pantalla activa solo se repinta si cambió un dato real, la sucursal, la vista o el día.
+   - Los eventos de sincronización que no modifican datos ya no provocan repintados.
+   - Los textos pequeños idénticos no se vuelven a escribir en el DOM (sin reinicio de animaciones).
+   ===================================================================== */
+const PERF={skip:0,paint:0};window.PERF=PERF;
+const stableNow=()=>{try{const m=document.getElementById('mn');return !!(m&&m.children.length&&main.k===paintKey())}catch(e){return false}};
+{const _rf=refresh;refresh=function(){if(stableNow()){PERF.skip++;return}PERF.paint++;const r=_rf.apply(this,arguments);try{main.k=paintKey()}catch(e){}return r}}
+{const _sr=syncRun;syncRun=function(){if(stableNow()){PERF.skip++;return}PERF.paint++;const r=_sr.apply(this,arguments);try{main.k=paintKey()}catch(e){}return r}}
+{const d=Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML');if(d&&d.set&&!Element.prototype.__zf){Element.prototype.__zf=1;Object.defineProperty(Element.prototype,'innerHTML',{configurable:true,enumerable:d.enumerable,get:d.get,set:function(v){try{if(this.id!=='mn'&&typeof v==='string'&&v.length<3000&&this.__h===v&&this.isConnected&&this.__n===this.childNodes.length)return}catch(e){}d.set.call(this,v);try{if(typeof v==='string'&&v.length<3000){this.__h=v;this.__n=this.childNodes.length}}catch(e){}}})}}
+
 </script><style id="capa2026">
 :root{--pr:#8b2bff;--ac:#ffd400;--er:#ff1f4b;--ok:#10b981;--or:#ff8a1f;--cy:#06b6d4;--ease:cubic-bezier(.4,0,.2,1)}
 /* Paleta morado neón (reemplaza el tema azul anterior) */
@@ -3870,11 +3884,11 @@ function items(){var o=[],S=E('S');
   return o}
 function nUnread(l){return l.filter(function(x){return!RD[x.id]}).length}
 function bell(){var h=$('#hdr .rw');if(!h||$('#ntb'))return;var b=document.createElement('button');b.id='ntb';b.className='btn g s';b.title='Notificaciones';b.setAttribute('aria-label','Notificaciones');b.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="nn" hidden></span>';b.onclick=function(e){e.stopPropagation();toggle()};var hm=h.querySelector('.hm');if(hm)hm.insertAdjacentElement('afterend',b);else h.insertBefore(b,h.firstChild);badge()}
-function badge(){var b=$('#ntb .nn');if(!b)return;var n=nUnread(items());b.hidden=!n;b.textContent=n>99?'99+':n}
+function badge(f){var b=$('#ntb .nn');if(!b)return;var k=(window.__DIRTY|0)+'|'+navigator.onLine+'|'+Object.keys(RD).length,t0=Date.now();if(!f&&b._k===k&&t0-(b._t||0)<8000)return;var n=nUnread(items()),t=n>99?'99+':String(n);b._k=k;b._t=t0;if(b._v!==t){b._v=t;b.textContent=n?t:''}if(b.hidden!==!n)b.hidden=!n}
 function render(){var p=$('#ntp');if(!p)return;var l=items();p.innerHTML='<div class="nh"><b>Notificaciones</b><button class="btn g s" onclick="NTF.read()">Marcar leído</button><button class="btn g s" aria-label="Cerrar" onclick="NTF.close()">✕</button></div>'+(l.length?l.map(function(x,i){return'<div class="ni '+x.c+(RD[x.id]?' rd':'')+'" tabindex="0" role="button" onclick="NTF.go('+i+')" onkeydown="if(event.key===\'Enter\')NTF.go('+i+')"><span class="dt"></span><div><b>'+esc2(x.t)+'</b><small>'+esc2(x.d)+'</small></div></div>'}).join(''):'<div class="ne">✓ Todo en orden. No hay avisos.</div>');p._l=l}
 function toggle(){var p=$('#ntp');if(!p){p=document.createElement('div');p.id='ntp';p.setAttribute('role','dialog');p.setAttribute('aria-label','Notificaciones');document.body.appendChild(p)}if(p.classList.contains('on'))return close();render();p.classList.add('on')}
 function close(){var p=$('#ntp');if(p)p.classList.remove('on')}
-window.NTF={items:items,close:close,read:function(){items().forEach(function(x){RD[x.id]=1});try{localStorage.setItem('giandy_ntf',JSON.stringify(RD))}catch(e){}render();badge()},go:function(i){var p=$('#ntp'),x=p&&p._l&&p._l[i];if(!x)return;RD[x.id]=1;try{localStorage.setItem('giandy_ntf',JSON.stringify(RD))}catch(e){}close();badge();try{E('go')(x.go)}catch(e){}}};
+window.NTF={bell:bell,badge:badge,items:items,close:close,read:function(){items().forEach(function(x){RD[x.id]=1});try{localStorage.setItem('giandy_ntf',JSON.stringify(RD))}catch(e){}render();badge()},go:function(i){var p=$('#ntp'),x=p&&p._l&&p._l[i];if(!x)return;RD[x.id]=1;try{localStorage.setItem('giandy_ntf',JSON.stringify(RD))}catch(e){}close();badge();try{E('go')(x.go)}catch(e){}}};
 document.addEventListener('click',function(e){var p=$('#ntp');if(p&&p.classList.contains('on')&&!p.contains(e.target)&&!(e.target.closest&&e.target.closest('#ntb')))close()});
 document.addEventListener('keydown',function(e){if(e.key==='Escape')close()});
 /* piel de tablas: cifras y códigos cortos no se parten en dos líneas */
