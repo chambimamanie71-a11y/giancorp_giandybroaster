@@ -11,7 +11,7 @@ var of=window.fetch&&window.fetch.bind(window); if(!of||window.SBH)return;
 var H=window.SBH={req:0,ok:0,fail:0,retry:0,timeout:0,offline:0,lat:[],last:null,lastErr:'',lastOk:0,boundary:0};
 var TMO=20000,MAXR=3;
 function isSb(u){return /\/(rest|auth)\/v1\//.test(u)}
-function idem(u,m){ if(m==='GET'||m==='HEAD'||m==='DELETE')return true; if(/\/rest\/v1\/rpc\/erp_(inc|mover|sembrar)/.test(u))return true; if(/\/rest\/v1\/erp_nodes/.test(u)&&/on_conflict=/.test(u))return true; return false}
+function idem(u,m){ if(m==='GET'||m==='HEAD'||m==='DELETE')return true; if(/\/rest\/v1\/rpc\/erp_(mover|sembrar|merge_venta)/.test(u))return true; if(/\/rest\/v1\/erp_nodes/.test(u)&&/on_conflict=/.test(u))return true; return false}
 function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
 var seen={ts:'',set:{}};
 function mkResp(rows,src){return new Response(JSON.stringify(rows),{status:200,headers:src.headers})}
@@ -161,6 +161,27 @@ let S,U,mod='dash',P={quick:true,cart:[],cat:'Todas',q:'',pay:'Efectivo',recv:''
 async function hash(p){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('gc:'+p));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}catch(e){return'p:'+p}}
 const persist=()=>{if(window.__rst)return;try{const j=JSON.stringify(S);if(j===persist.l)return;persist.l=j;window.__DIRTY=(window.__DIRTY|0)+1;localStorage.setItem(K,j)}catch(e){}};
 /* Clave de estado de pantalla: si no cambió ningún dato, la sucursal, la vista ni el día, no hace falta repintar */
+
+/* ===== SINCRONIZACIÓN ZERO REBOUND: identidad del equipo, versiones por pedido y fusión determinista ===== */
+const DEVID=(()=>{try{let d=sessionStorage.getItem('giandy_dev');if(!d){d='D'+Math.random().toString(36).slice(2,6).toUpperCase();sessionStorage.setItem('giandy_dev',d)}return d}catch(e){return'D'+Math.random().toString(36).slice(2,6).toUpperCase()}})();
+const PENDW={};window.PENDW=PENDW;
+const COCR={'Pendiente':0,'En preparación':1,'Listo':2,'Entregado':3,'Cancelado':4};
+function cocTsJ(c){let t=0;if(c&&c.h&&typeof c.h=='object')Object.values(c.h).forEach(x=>{x=+x;if(isFinite(x)&&x>t)t=x});return t}
+function canon(x){if(Array.isArray(x))return'['+x.map(canon).join(',')+']';if(x&&typeof x=='object')return'{'+Object.keys(x).sort().filter(k=>x[k]!==undefined).map(k=>JSON.stringify(k)+':'+canon(x[k])).join(',')+'}';return JSON.stringify(x===undefined?null:x)}
+function cocAWins(a,b){const ea=+a.ep||0,eb=+b.ep||0;if(ea!=eb)return ea>eb;const ra=COCR[a.est]||0,rb=COCR[b.est]||0;if(ra!=rb)return ra>rb;const ta=cocTsJ(a),tb=cocTsJ(b);if(ta!=tb)return ta>tb;return false}
+function mergeCoc(a,b){if(!a||typeof a!='object')return b;if(!b||typeof b!='object')return a;const w=cocAWins(a,b)?a:b,h={...(a.h||{})};Object.entries(b.h||{}).forEach(([k,v])=>{h[k]=Math.max(+h[k]||0,+v||0)});
+ const mp=new Map();[...(a.log||[]),...(b.log||[])].forEach(e=>mp.set(canon(e),e));const log=[...mp.values()].sort((x,y)=>((x&&x.ts)||0)-((y&&y.ts)||0)||(canon(x)<canon(y)?-1:1));
+ const r={...w,h,log},ps=((+a.pt||0)>(+b.pt||0))?a:b;if('pri' in ps){r.pri=ps.pri;r.pt=ps.pt||0}return r}
+function mergeVenta(l,r){const ml=+l.mt||+l.ts||0,mr=+r.mt||+r.ts||0,base=ml>mr?l:r,o={...base};
+ if(l.coc||r.coc){o.coc=mergeCoc(l.coc,r.coc);const ws=(l.coc&&r.coc)?(cocAWins(l.coc,r.coc)?l:r):(l.coc?l:r);
+  if(ws!==base){if(ws.salon&&base.salon&&ws.salon.estado!==undefined){o.salon={...base.salon,estado:ws.salon.estado};if(ws.salon.hSrv!==undefined)o.salon.hSrv=ws.salon.hSrv}if(ws.dlv&&base.dlv&&ws.dlv.estado!==undefined)o.dlv={...base.dlv,estado:ws.dlv.estado}}}
+ o.mt=Math.max(ml,mr);return o}
+function applyVenta(r){try{if(!r||r.id==null)return false;const id=String(r.id);
+ if((S.anuladas||[]).some(a=>a&&String(a.id)==id)){const k=S.ventas.findIndex(v=>String(v.id)==id);if(k>=0){S.ventas.splice(k,1);return true}return false}
+ const rem=fixV(r),i=S.ventas.findIndex(v=>String(v.id)==id),loc=i>=0?S.ventas[i]:null,m=loc?mergeVenta(loc,rem):rem,cm=canon(m);
+ if(loc&&canon(loc)===cm){if(canon(rem)===cm)FB.sent[id]=1;return false}
+ if(i>=0)S.ventas[i]=m;else{S.ventas.push(m);S.ventas.sort((a,b)=>a.ts-b.ts)}
+ VSIG[id]=JSON.stringify(m);FB.sent[id]=canon(rem)===cm?1:0;return true}catch(e){console.warn('applyVenta:',e);return false}}
 function paintKey(){try{return(window.__DIRTY|0)+'|'+mod+'|'+BR+'|'+VW+'|'+(typeof TT!=='undefined'?TT.m+'/'+TT.a+'/'+TT.b:'')+'|'+new Date().toDateString()+'|'+(U?U.u:'')+'|'+(mod=='pos'?JSON.stringify(P):'')}catch(e){return'x'+Math.random()}}
 const save=()=>{try{stampNew()}catch(e){console.warn('vínculo:',e)}persist();push();syncKick()};
 // ===== SINCRONIZACIÓN EN TIEMPO REAL · Supabase (Postgres + Realtime) =====
@@ -219,6 +240,9 @@ function sbEvt(path,data){const p=path.split('/');if(p[0]=='ops')return;if(p[0]=
  if(ITEM_KEYS.includes(p[0])&&p[2]=='sx')return;if(ITEM_KEYS.includes(p[0])&&p.length==2){const k=p[0],i=+p[1];if(data==null)return;if(S[k]&&S[k][i]){Object.keys(data).forEach(f=>onRemote('/'+path+'/'+f,data[f]));return}data={...data,sx:{}}}onRemote('/'+path,data)}
 async function fbReq(m,p,d){if(!FB.url||!SBC)return true;try{p=cl(p);const T=()=>SBC.from(TB),ck=r=>{if(r.error)throw r.error};
  if(d&&d['.sv']){ck(await SBC.rpc('erp_inc',{p_path:p,p_delta:d['.sv'].increment}));return true}
+ if(m=='PUT'&&/^ventas\/[^\/]+$/.test(p)&&d&&typeof d=='object'&&!(FB.mrgOff>Date.now())){const r=await SBC.rpc('erp_merge_venta',{p_path:p,p_data:d});
+  if(!r.error){const dd=r.data;let ch=false;if(dd==null){const k=S.ventas.findIndex(v=>'ventas/'+v.id==p);if(k>=0){S.ventas.splice(k,1);ch=true}}else ch=applyVenta(dd);if(ch){persist();clearTimeout(sbEvt.t);sbEvt.t=setTimeout(refresh,60)}return true}
+  if(r.error.code=='PGRST202'||r.error.code=='404'||/erp_merge_venta/.test(r.error.message||'')){FB.mrgOff=Date.now()+30000;if(!FB.mrgWarn){FB.mrgWarn=1;try{toast('Falta actualizar el backend: ejecute supabase_backend_giancorp.sql en Supabase (fusión de pedidos). Mientras tanto se usa la fusión local.')}catch(e){}}}else throw r.error}
  if(m=='PUT'&&LOGS.includes(p)){const Sx=lg[p]=lg[p]||new Set(),nw=arr(d).filter(e=>e&&typeof e=='object').map(e=>({id:lid(e),e})).filter(x=>!Sx.has(x.id));for(let i=0;i<nw.length;i+=200){const c=nw.slice(i,i+200);ck(await T().upsert(c.map(x=>({path:p+'/'+x.id,data:x.e})),{onConflict:'path'}));c.forEach(x=>{Sx.add(x.id);PS.delete(x.id)})}return true}
  if(m=='DELETE'){ck(await(p===''?T().delete().neq('path',''):T().delete().eq('path',p)));if(p!=='')ck(await T().delete().like('path',lk(p)+'/%'));return true}
  let rows;const s=p.split('/');
@@ -252,14 +276,14 @@ function setKey(k,d){let v=d;
  if(k=='caja')return;if(k=='cajas'){v={};Object.entries(d||{}).forEach(([b,c])=>v[b]={open:c&&c.open||null,movs:arr(c&&c.movs),cierres:arr(c&&c.cierres)})}
  if(k=='cfg')v={margen:.65,igv:false,...(d||{}),com:{...((d&&d.com)||{})}};
  S[k]=v;if(SYNC_KEYS.includes(k))FB.last[k]=JSON.stringify(v);if(k=='cfg'){S.cfg.emp=S.cfg.emp||{};S.cfg.pays=S.cfg.pays||PAYS.map(n=>({n,on:1}));syncPays();brand()}if(k=='insumos'||k=='productos')S[k].forEach(wire)}
-function setVentas(o){const rem=Object.values(o||{}).map(fixV),ids=new Set(rem.map(v=>String(v.id))),keep=S.ventas.filter(v=>!ids.has(String(v.id))&&!FB.sent[v.id]);FB.sent={};rem.forEach(v=>FB.sent[v.id]=1);S.ventas=[...rem,...keep].sort((a,b)=>a.ts-b.ts)}
+function setVentas(o){const rem=Object.values(o||{}).map(fixV),ids=new Set(rem.map(v=>String(v.id))),loc=new Map(S.ventas.map(v=>[String(v.id),v])),keep=S.ventas.filter(v=>!ids.has(String(v.id))&&!FB.sent[v.id]),tomb=new Set((S.anuladas||[]).map(a=>a&&String(a.id))),out=[];FB.sent={};rem.forEach(r=>{const id=String(r.id);if(tomb.has(id))return;const l=loc.get(id),m=l?mergeVenta(l,r):r;out.push(m);FB.sent[id]=canon(m)===canon(r)?1:0;try{VSIG[id]=JSON.stringify(m)}catch(e){}});S.ventas=[...out,...keep].sort((a,b)=>a.ts-b.ts)}
 function onRemote(path,data){const p=path.split('/').filter(Boolean);
  if(!p.length){FB.ready=true;
   if(data==null){FB.has={};FB.last={};push();return}
   SYNC_KEYS.forEach(k=>{if(data[k]!==undefined)setKey(k,data[k]);else FB.last[k]=undefined});
   ITEM_KEYS.forEach(k=>{if(data[k]!==undefined){setKey(k,data[k]);FB.has[k]=1;FB.items[k]=S[k].map(strip)}});
   setVentas(data.ventas);push()}
- else if(p[0]=='ventas'){if(p.length==1)setVentas(data);else{const id=p[1];S.ventas=S.ventas.filter(v=>String(v.id)!=id);if(data!=null&&p.length==2){S.ventas.push(fixV(data));FB.sent[id]=1}S.ventas.sort((a,b)=>a.ts-b.ts)}}
+ else if(p[0]=='ventas'){if(p.length==1)setVentas(data);else if(p.length==2){const id=p[1];if(data!=null)applyVenta(data);else{S.ventas=S.ventas.filter(v=>String(v.id)!=id);delete FB.sent[id];delete VSIG[id]}}}
  else if(ITEM_KEYS.includes(p[0])&&p.length>1){const k=p[0],i=+p[1];if(data==null)return;if(p.length==2)S[k][i]=wire(data);else if(S[k][i]){if(p[2]=='sx'&&p.length==4)(S[k][i].sx=S[k][i].sx||{})[p[3]]=data;else S[k][i][p[2]]=data}if(S[k][i]){(FB.items[k]||(FB.items[k]=[]))[i]=strip(S[k][i])}}
  else if(p.length==1)setKey(p[0],data);
  autoLink();applyRoles();persist();clearTimeout(onRemote.t);onRemote.t=setTimeout(refresh,80)}
@@ -269,13 +293,12 @@ async function startSync(){if(!FB.url)return;if(!SBC){setStat('● Faltan URL o 
  if(FB.em){try{const a=await SBC.auth.signInWithPassword({email:FB.em,password:FB.pw});if(a.error)throw a.error}catch(e){console.warn('Supabase auth:',e&&e.message||e);setStat('● Usuario o contraseña de la nube incorrectos','#dc2626');return setTimeout(startSync,15000)}}
  try{const rows=await loadAll();SBlast=rows.reduce((a,r)=>r.updated_at>a?r.updated_at:a,'');rows.forEach(r=>{const q=r.path.split('/');if(LOGS.includes(q[0])&&q.length==2)(lg[q[0]]=lg[q[0]]||new Set()).add(q[1])});for(const r of rows.filter(r=>LOGS.includes(r.path)&&Array.isArray(r.data))){await fbReq('PUT','/'+r.path,r.data);await SBC.from(TB).delete().eq('path',r.path)}const rs=rows.find(r=>r.path=='sys/reset');if(rs&&rstCheck(rs.data))return;S.sxlog=S.sxlog||[];IQ.splice(0).forEach(q=>{const a=q.p.split('/'),x=S[a[0]]&&S[a[0]][+a[1]];if(x)S.sxlog.push({ts:Date.now(),n:++seq,k:a[0],c:x.code||x.name,b:a[3],d:q.d,u:'cola'})});sq();const T0=tree(rows);if(T0)LOGS.forEach(k=>{const m=new Map();[...(S[k]||[]),...arr(T0[k])].forEach(e=>{if(e&&typeof e=='object')m.set(lid(e),e)});T0[k]=[...m.values()].sort((a,b)=>(a.ts||0)-(b.ts||0))});else{IQ.length=0;sq()}if(T0){onRemote('',T0);sxRebuild(true)}else{sxRebuild(false);onRemote('',null)}LOGS.forEach(k=>{FB.last[k]=undefined});S.sxlog.forEach(e=>{const id=lid(e);if(!(lg.sxlog&&lg.sxlog.has(id)))PS.add(id)});push();await nvInit()}catch(e){console.warn('Supabase:',e&&e.message||e);setStat(e&&(e.code=='PGRST205'||e.code=='42P01'||e.code=='PGRST202')?'● Falta ejecutar supabase_inventario.sql en Supabase':e&&(e.code=='401'||e.code=='403'||e.code=='42501')?'● Sin permiso: ejecute supabase.sql o revise la clave':'● Sin conexión (reintentando)','#dc2626');return setTimeout(startSync,10000)}
  startLive()}
-let SBpoll,SBpush,SBrc,SBnv,nvSig=null,nvN=0;
-async function nvTick(){if(!SBC||!NV.ok||document.hidden)return;const r=await SBC.from('movimientos_inventario').select('erp_ts').order('erp_ts.desc').limit(1);if(r.error)throw r.error;const g=(r.data&&r.data[0]&&r.data[0].erp_ts)||'0';nvN++;if(g!==nvSig||nvN%10==0){nvSig=g;const n=await nvLoad();nvFlush();if(n)refresh()}}
+let SBpoll,SBpush,SBrc,SBnv;
 function stopLive(){clearInterval(SBnv);clearInterval(SBpoll);clearInterval(SBpush);try{if(SBrc){SBrc.removeAllChannels();SBrc=null}}catch(e){}}
 function startLive(){stopLive();setStat('● En línea · sincronizado','#16a34a');
  try{if(window.supabase){SBrc=window.supabase.createClient(FB.url,FB.key,{auth:{persistSession:false}});if(SBC.token())SBrc.realtime.setAuth(SBC.token());SBrc.channel('erp').on('postgres_changes',{event:'*',schema:'public',table:TB},pl=>{const r=pl.eventType=='DELETE'?{path:pl.old&&pl.old.path,data:null}:pl.new;if(r&&r.path)sbEvt(r.path,r.data)}).subscribe();SBrc.channel('inventario').on('postgres_changes',{event:'*',schema:'public',table:'inventario_real'},pl=>{const r=pl.new;if(r&&r.erp_codigo&&nvRow(r)){persist();clearTimeout(nvRow.t);nvRow.t=setTimeout(refresh,60)}}).subscribe()}}catch(e){}
  const pl=async()=>{try{const r=await SBC.from(TB).select('path,data,updated_at').nlike('path','ops/%').gt('updated_at',SBlast).order('updated_at').limit(500);if(r.error)throw r.error;r.data.forEach(x=>{sbEvt(x.path,x.data);if(x.updated_at>SBlast)SBlast=x.updated_at});setStat('● En línea · sincronizado','#16a34a')}catch(e){FB.err=(e&&e.message)||String(e);setStat('● Sin conexión (reintentando)','#dc2626')}};
- nvSig=null;nvN=0;SBnv=setInterval(()=>{nvTick().catch(()=>{})},3000);SBpoll=setInterval(pl,5000);SBpush=setInterval(push,15000);pl()}
+ SBnv=setInterval(()=>{nvLoad().then(n=>{nvFlush();if(n)refresh()}).catch(()=>{})},15000);SBpoll=setInterval(pl,5000);SBpush=setInterval(push,15000);pl()}
 
 async function init(){
  try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
@@ -593,7 +616,7 @@ V.invc=function(){const DY=864e5,ds=CS.d||ymd(new Date()),b=new Date(ds+'T00:00'
 
 // ===== KARDEX POR PRODUCTO =====
 let CURDOC='';
-function autoLink(){if(!S.recetas||!S.insumos)return;const al={kion:'Jengibre (kion)'},nc=new Map(),nz=t=>{let v=nc.get(t);if(v===undefined){v=norm(t);nc.set(t,v)}return v},N=S.insumos.map(i=>[nz(i.name),i]),set=new Set(N.map(x=>x[0]));S.recetas.forEach(r=>(r.items||[]).forEach(l=>{if(l.ins)return;const n=nz(l.ing);if(set.has(n))return;let b=null,bl=-1;for(const[k,i]of N){if(n.startsWith(k)&&k.length>bl){b=i;bl=k.length}}if(!b&&al[n])b=S.insumos.find(i=>i.name==al[n]);if(b)l.ins=b.name}))}
+function autoLink(){if(!S.recetas||!S.insumos)return;const al={kion:'Jengibre (kion)'};S.recetas.forEach(r=>(r.items||[]).forEach(l=>{if(l.ins||S.insumos.some(i=>norm(i.name)==norm(l.ing)))return;const n=norm(l.ing);let b=null;S.insumos.forEach(i=>{const k=norm(i.name);if(n.startsWith(k)&&(!b||k.length>norm(b.name).length))b=i});if(!b&&al[n])b=S.insumos.find(i=>i.name==al[n]);if(b)l.ins=b.name}))}
 Object.assign(A,{vinc(ing){if(U.r!='Administrador')return toast('Solo el Administrador');modal('Vincular «'+ing+'» con el inventario',[{k:'n',l:'Insumo del inventario',o:S.insumos.map(i=>i.name)}],d=>{S.recetas.forEach(r=>r.items.forEach(l=>{if(l.ing==ing)l.ins=d.n}));aud('Vínculo receta-inventario',ing+' → '+d.n,'Descuento automático al vender');save();V.kdx()})}});
 const KX={i:0,p:'todo',a:'',b:''};
 V.kdx=function(){const DY=864e5,x=S.insumos[KX.i]||S.insumos[0],n=new Date(),d0=D0(n);let a=0,b=9e15;
@@ -2329,13 +2352,13 @@ const CC=()=>{const c=S.cfg.coc=S.cfg.coc||{};if(!c.desde){c.desde=Date.now();pe
 const est=v=>(v.coc&&v.coc.est)||'Pendiente',tipoV=v=>v.dlv?'Delivery':v.salon?'Salón':'Para llevar';
 const ped=()=>{const c=CC(),ids=scIds();return S.ventas.filter(v=>v.ts>=c.desde&&ids.includes(bid(v)))};
 const prio=v=>{if(v.coc&&v.coc.pri)return v.coc.pri;const t=mi(v.ts);return t>=CC().dem||v.dlv||(v.obs&&String(v.obs).trim())?'Alta':t<5?'Baja':'Media'};
-const setE=(v,n,mo)=>{const c=v.coc=v.coc||{est:'Pendiente',h:{}},p=est(v),now=Date.now();c.h=c.h||{};c.est=n;c.h[n]=now;c.by=U.u;if(n!='Pendiente'&&n!='Cancelado'&&n!='Entregado')c.cook=U.u;
+const setE=(v,n,mo)=>{const c=v.coc=v.coc||{est:'Pendiente',h:{}},p=est(v),now=Math.max(Date.now(),cocTsJ(v.coc)+1);c.h=c.h||{};c.est=n;c.h[n]=now;c.by=U.u;c.dev=DEVID;v.mt=Math.max(now,(+v.mt||0)+1);v.mdev=DEVID;if(n!='Pendiente'&&n!='Cancelado'&&n!='Entregado')c.cook=U.u;
  if(v.salon){const q={'En preparación':'En preparación',Listo:'Servido',Entregado:'Servido'}[n];if(q){v.salon.estado=q;if(q=='Servido'&&!v.salon.hSrv)v.salon.hSrv=now}}
  if(v.dlv){const q={'En preparación':'En preparación',Entregado:'En camino'}[n];if(q&&DST.indexOf(v.dlv.estado)<DST.indexOf(q))v.dlv.estado=q}
- (c.log=c.log||[]).push({ts:now,u:U.u,de:p,a:n,mo:mo||''});aud('Estado de cocina',pad(v)+': '+p+' → '+n,mo||'');FB.sent[v.id]=0;
+ (c.log=c.log||[]).push({ts:now,u:U.u,de:p,a:n,mo:mo||'',d:DEVID});aud('Estado de cocina',pad(v)+': '+p+' → '+n+' · equipo '+DEVID,mo||'');FB.sent[v.id]=0;
  if(n=='Listo'&&CC().modo=='Automático'&&!v.dlv)setE(v,'Entregado','Automático')};
 A.cocEst=(id,n)=>{const v=S.ventas.find(x=>String(x.id)==String(id));if(!v)return;if(n=='Cancelado')return modal('Cancelar pedido en cocina',[{k:'mo',l:'Motivo (obligatorio)'}],d=>{if(!d.mo||!d.mo.trim())return toast('Indique el motivo');setE(v,n,d.mo.trim());save();V.cocina()});setE(v,n);save();V.cocina()};
-A.cocPri=id=>{const v=S.ventas.find(x=>String(x.id)==String(id));if(!v)return;const c=v.coc=v.coc||{est:'Pendiente',h:{}},o=['Alta','Media','Baja',''],p=o[(o.indexOf(c.pri||'')+1)%4];aud('Prioridad de pedido',pad(v)+': '+(c.pri||'Automática')+' → '+(p||'Automática'));c.pri=p;FB.sent[v.id]=0;save();V.cocina()};
+A.cocPri=id=>{const v=S.ventas.find(x=>String(x.id)==String(id));if(!v)return;const c=v.coc=v.coc||{est:'Pendiente',h:{}},o=['Alta','Media','Baja',''],p=o[(o.indexOf(c.pri||'')+1)%4];aud('Prioridad de pedido',pad(v)+': '+(c.pri||'Automática')+' → '+(p||'Automática'));c.pri=p;c.pt=Math.max(Date.now(),(+c.pt||0)+1);v.mt=Math.max(Date.now(),(+v.mt||0)+1);v.mdev=DEVID;FB.sent[v.id]=0;save();V.cocina()};
 A.cocCfg=()=>{if(U.r!='Administrador')return toast('Solo el Administrador');const c=CC();modal('Configuración de cocina',[{k:'modo',l:'Modo de operación',o:['Manual','Automático'],v:c.modo},{k:'dem',l:'Minutos para considerar un pedido demorado (prioridad alta)',t:'number',v:c.dem},{k:'sat',l:'Pedidos activos que indican cocina saturada',t:'number',v:c.sat}],d=>{aud('Configuración de cocina',JSON.stringify({modo:c.modo,dem:c.dem,sat:c.sat})+' → '+JSON.stringify({modo:d.modo,dem:+d.dem,sat:+d.sat}));Object.assign(S.cfg.coc,{modo:d.modo,dem:+d.dem||15,sat:+d.sat||8});save();V.cocina()})};
 const alC=()=>{const c=CC(),o=[],P=ped(),act=P.filter(v=>['Pendiente','En preparación'].includes(est(v)));
  act.forEach(v=>{const t=mi(v.ts);if(t>=c.dem*2)o.push([3,'Tiempo excesivo',pad(v)+' · '+t.toFixed(0)+' min sin terminar']);else if(t>=c.dem)o.push([2,'Pedido retrasado',pad(v)+' · '+t.toFixed(0)+' min en '+est(v)])});
@@ -2347,7 +2370,7 @@ V.cocina=function(){const c=CC(),adm=U.r=='Administrador';if(c.modo=='Automátic
  const P=ped(),d0=D0(Date.now()),act=P.filter(v=>['Pendiente','En preparación','Listo'].includes(est(v))).sort((a,b)=>PR[prio(a)]-PR[prio(b)]||a.ts-b.ts),hoy=P.filter(v=>v.ts>=d0),ter=hoy.filter(v=>['Listo','Entregado'].includes(est(v))),
  tp=ter.filter(v=>v.coc&&v.coc.h&&v.coc.h.Listo).map(v=>(v.coc.h.Listo-(v.coc.h['En preparación']||v.ts))/6e4),av=tp.length?sm(tp,x=>x)/tp.length:null,dem=act.filter(v=>est(v)!='Listo'&&mi(v.ts)>=c.dem),
  nx={Pendiente:['En preparación','Iniciar preparación'],'En preparación':['Listo','Marcar listo'],Listo:['Entregado','Confirmar entrega']},
- card=v=>{const e=est(v),p=prio(v),t=mi(v.ts),late=e!='Listo'&&t>=c.dem;return`<div class="cd" style="border-left:5px solid ${COL[e]};${late?'box-shadow:0 0 0 2px var(--er) inset':''}"><div class="rw" style="justify-content:space-between"><b style="font-size:18px">${pad(v)}</b><span class="bg ${p=='Alta'?'r':p=='Media'?'y':'o'}">Prioridad ${p}</span></div><div style="color:var(--mu);font-size:12px">${tipoV(v)}${v.salon?' · Mesa '+esc(v.salon.mesa):''}${v.dlv&&v.dlv.zona?' · '+esc(v.dlv.zona):''} · Ingreso ${hm(v.ts)}</div><div style="margin:8px 0">${v.items.map(i=>`<div><b>${nn(i.qty)}×</b> ${esc(i.name)}</div>`).join('')}</div>${v.obs?`<div class="bg y" style="white-space:normal">Obs.: ${esc(v.obs)}</div>`:''}<div class="rw" style="justify-content:space-between;margin-top:8px"><span class="bg ${e=='Listo'?'o':e=='Pendiente'?'y':''}">${e}</span><b class="${late?'dn':''}">${t.toFixed(0)} min</b></div><div class="rw np" style="margin-top:8px"><button class="btn s" onclick="A.cocEst('${v.id}','${nx[e][0]}')">${nx[e][1]}</button><button class="btn g s" onclick="A.cocPri('${v.id}')">Prioridad</button><button class="btn r s" onclick="A.cocEst('${v.id}','Cancelado')">Cancelar</button></div></div>`},
+ card=v=>{const e=est(v),p=prio(v),t=mi(v.ts),late=e!='Listo'&&t>=c.dem;return`<div class="cd" style="border-left:5px solid ${COL[e]};${late?'box-shadow:0 0 0 2px var(--er) inset':''}"><div class="rw" style="justify-content:space-between"><b style="font-size:18px">${pad(v)}</b><span class="bg ${p=='Alta'?'r':p=='Media'?'y':'o'}">Prioridad ${p}</span></div><div style="color:var(--mu);font-size:12px">${tipoV(v)}${v.salon?' · Mesa '+esc(v.salon.mesa):''}${v.dlv&&v.dlv.zona?' · '+esc(v.dlv.zona):''} · Ingreso ${hm(v.ts)}</div><div style="margin:8px 0">${v.items.map(i=>`<div><b>${nn(i.qty)}×</b> ${esc(i.name)}</div>`).join('')}</div>${v.obs?`<div class="bg y" style="white-space:normal">Obs.: ${esc(v.obs)}</div>`:''}<div class="rw" style="justify-content:space-between;margin-top:8px"><span class="bg ${e=='Listo'?'o':e=='Pendiente'?'y':''}">${e}</span>${PENDW[v.id]?'<span class="bg y" title="Esperando confirmación de la nube">Enviando…</span>':''}<b class="${late?'dn':''}">${t.toFixed(0)} min</b></div><div class="rw np" style="margin-top:8px"><button class="btn s" onclick="A.cocEst('${v.id}','${nx[e][0]}')">${nx[e][1]}</button><button class="btn g s" onclick="A.cocPri('${v.id}')">Prioridad</button><button class="btn r s" onclick="A.cocEst('${v.id}','Cancelado')">Cancelar</button></div></div>`},
  pv={};hoy.forEach(v=>v.items.forEach(i=>pv[i.name]=(pv[i.name]||0)+i.qty));const ck={};ter.forEach(v=>{const k=(v.coc&&v.coc.cook)||'Sin asignar';(ck[k]=ck[k]||[]).push(v)});
  const dl=hoy.filter(v=>v.dlv),dh=dl.filter(v=>v.dlv.estado=='Entregado'&&v.dlv.hEnt),al=alC(),rec=hoy.filter(v=>['Entregado','Cancelado'].includes(est(v))).sort((a,b)=>b.ts-a.ts).slice(0,15);
  main(tb('Cocina y entregas','<button class="btn g" onclick="V.cocina()">Actualizar</button><button class="btn g" onclick="mod=\'delivery\';V.delivery()">Delivery y repartidores</button>'+(adm?'<button class="btn" onclick="A.cocCfg()">Configurar</button>':''))+hd('Pedido en caja → cocina → entrega → cliente · Modo '+c.modo)+`<div class="gr">${GK('Pedidos pendientes',act.filter(v=>est(v)=='Pendiente').length,'Sin iniciar','#a16207')}${GK('En preparación',act.filter(v=>est(v)=='En preparación').length)}${GK('Pedidos demorados',dem.length,'Más de '+c.dem+' min',dem.length?'var(--er)':'var(--ok)')}${GK('Pedidos terminados',ter.length,'Hoy')}${GK('Tiempo promedio',av==null?'—':av.toFixed(1)+' min','Preparación de hoy')}</div>
@@ -2356,7 +2379,7 @@ V.cocina=function(){const c=CC(),adm=U.r=='Administrador';if(c.modo=='Automátic
  <h3>Reportes operativos de hoy</h3><div class="g2"><div class="cd"><h4 style="margin-top:0">Producción diaria</h4>${tbl(['Producto','Unidades'],Object.entries(pv).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>[esc(k),nn(v)]))}<small style="color:var(--mu)">${hoy.length} pedidos · ${hoy.filter(v=>est(v)=='Cancelado').length} cancelados</small></div>
  <div class="cd"><h4 style="margin-top:0">Rendimiento de cocina</h4>${tbl(['Cocinero','Pedidos','Tiempo promedio'],Object.entries(ck).map(([k,L])=>{const t=L.filter(v=>v.coc&&v.coc.h&&v.coc.h.Listo).map(v=>(v.coc.h.Listo-(v.coc.h['En preparación']||v.ts))/6e4);return[esc(k),L.length,t.length?(sm(t,x=>x)/t.length).toFixed(1)+' min':'—']}))}</div>
  <div class="cd"><h4 style="margin-top:0">Entregas (delivery)</h4>${tbl(['Indicador','Valor'],[['Pedidos delivery',dl.length],['Entregados',dh.length],['Tiempo promedio',dh.length?(sm(dh,v=>v.dlv.hEnt-v.ts)/dh.length/6e4).toFixed(0)+' min':'—'],['Costo de movilidad',m(sm(dl,v=>+v.dlv.cost||0))]])}</div>
- <div class="cd"><h4 style="margin-top:0">Entregados y cancelados recientes</h4>${tbl(['Pedido','Tipo','Hora','Estado'],rec.map(v=>[pad(v),tipoV(v),hm(v.ts),`<span class="bg ${est(v)=='Cancelado'?'r':'o'}">${est(v)}</span>`]))}</div></div>`)};
+ <div class="cd"><h4 style="margin-top:0">Entregados y cancelados recientes</h4>${tbl(['Pedido','Tipo','Hora','Estado',''],rec.map(v=>[pad(v),tipoV(v),hm(v.ts),`<span class="bg ${est(v)=='Cancelado'?'r':'o'}">${est(v)}</span>`,adm?`<button class="btn g s" onclick="A.cocReabrir('${v.id}')">Reabrir</button>`:'']))}</div></div>`)};
 setInterval(()=>{try{if(U&&mod=='cocina'&&$('#ov').hidden&&!/INPUT|SELECT|TEXTAREA/.test((document.activeElement||{}).tagName||''))V.cocina()}catch(e){}},30000);
 applyRoles();
 })();
@@ -2399,7 +2422,7 @@ document.addEventListener('visibilitychange',()=>{if(!FB.url||!SBC||!FB.ready)re
 window.addEventListener('pagehide',stopLive);
 document.addEventListener('click',e=>{if(e.target&&e.target.id=='st')A.diag()});
 A.diag=async()=>{if(!SBC)return alert('No hay conexión configurada. Use «Conexión a la nube».');const o=[],t=async(n,f)=>{try{const r=await f();o.push((r&&r.error?'✗ ':'✓ ')+n+(r&&r.error?': '+r.error.message+' ('+r.error.code+')':''))}catch(e){o.push('✗ '+n+': '+(e.message||e))}};
- await t('Leer tabla erp_nodes',()=>SBC.from(TB).select('path').limit(1));await t('Escribir en la nube',()=>SBC.from(TB).upsert([{path:'sys/diag',data:{ts:Date.now()}}],{onConflict:'path'}));await t('Borrar prueba',()=>SBC.from(TB).delete().eq('path','sys/diag'));await t('Tabla inventario_real',()=>SBC.from('inventario_real').select('id').limit(1));await t('Tabla movimientos_inventario',()=>SBC.from('movimientos_inventario').select('id').limit(1));await t('Función erp_sembrar (ejecutó supabase_inventario.sql)',()=>SBC.rpc('erp_sembrar',{p_items:[]}));o.push('Stock leído de la nube: '+(NV.ok?'SÍ ('+NV.rows.length+' filas)':'NO — el stock no se está leyendo de inventario_real'));o.push('Operaciones de stock en cola: '+NV.q.length);
+ await t('Leer tabla erp_nodes',()=>SBC.from(TB).select('path').limit(1));await t('Escribir en la nube',()=>SBC.from(TB).upsert([{path:'sys/diag',data:{ts:Date.now()}}],{onConflict:'path'}));await t('Borrar prueba',()=>SBC.from(TB).delete().eq('path','sys/diag'));
  o.push('Movimientos de stock locales: '+(S.sxlog||[]).length);o.push('Pendientes de enviar: '+(PS.size+S.ventas.filter(v=>!FB.sent[v.id]).length));o.push('Último error: '+(FB.err||'ninguno'));alert('Diagnóstico de nube\n\n'+o.join('\n'))};
 A.hardReset=()=>{if(U.r!='Administrador')return toast('Solo el Administrador');modal('Reiniciar sistema desde cero',[{k:'w',l:'Se borra TODO (ventas, inventario, caja, usuarios) en la nube y en todos los equipos conectados. Antes se descarga un respaldo. Escriba exactamente: REINICIAR_SISTEMA'}],d=>{if((d.w||'').trim()!='REINICIAR_SISTEMA')return toast('Palabra incorrecta: no se reinició nada');(async()=>{try{await dlj('respaldo_antes_de_reiniciar_'+new Date().toISOString().slice(0,10),S);if(SBC){const a=await SBC.from(TB).delete().neq('path','');if(a.error)throw a.error;const id=Date.now().toString(36)+Math.random().toString(36).slice(2,6),b=await SBC.from(TB).upsert([{path:'sys/reset',data:{id,ts:Date.now(),by:U.u}}],{onConflict:'path'});if(b.error)throw b.error;localStorage.setItem('giandy_rst',id)}window.__rst=1;FB.ready=false;localStorage.removeItem(K);localStorage.removeItem('giandy_incq');alert('Sistema reiniciado. Se recargará con los datos de fábrica.');location.reload()}catch(e){alert('No se pudo reiniciar: '+(e.message||e))}})()})};
 const _resp=V.resp;V.resp=function(){const r=_resp.apply(this,arguments);if(U.r=='Administrador'){try{$('#mn').insertAdjacentHTML('beforeend','<div class="cd" style="margin-top:12px;border-color:var(--er)"><h3 style="margin-top:0">Reinicio total corporativo</h3><p style="color:var(--mu)">Deja el sistema en cero en la nube y en todos los equipos. Pide una palabra clave de seguridad y descarga antes un respaldo.</p><button class="btn r" onclick="A.invReset()">Reiniciar inventario desde cero</button> <button class="btn g" onclick="A.hardReset()">Reinicio total de datos (ventas, caja, usuarios)</button></div>')}catch(e){}}return r};
@@ -2473,7 +2496,7 @@ function stampIds(){if(!S.cfg)return;if(Array.isArray(S.cfg.pays))S.cfg.pays.for
 {const _s=stampNew;stampNew=function(){_s.apply(this,arguments);stampIds()}}
 // ---- cambios en ventas ya enviadas: detectados y reenviados (cocina, delivery, correcciones) ----
 const VSIG={};
-{const _p=push;push=function(){try{if(FB.url&&FB.ready){const lim=Date.now()-3*864e5;(S.ventas||[]).forEach(v=>{if(!v||!(v.ts>=lim))return;const s=JSON.stringify(v),o=VSIG[v.id];VSIG[v.id]=s;if(o!==undefined&&o!==s&&FB.sent[v.id])FB.sent[v.id]=0})}}catch(e){}return _p.apply(this,arguments)}}
+{const _p=push;push=function(){try{if(FB.url&&FB.ready){const lim=Date.now()-3*864e5;(S.ventas||[]).forEach(v=>{if(!v||!(v.ts>=lim))return;const s0=JSON.stringify(v),o=VSIG[v.id];if(o!==undefined&&o!==s0){v.mt=Math.max(Date.now(),(+v.mt||0)+1);v.mdev=DEVID}const s=JSON.stringify(v);VSIG[v.id]=s;if(o!==undefined&&o!==s0&&FB.sent[v.id])FB.sent[v.id]=0})}}catch(e){}return _p.apply(this,arguments)}}
 // red de seguridad: ninguna edición queda solo en memoria
 {let t=null;const kick=()=>{clearTimeout(t);t=setTimeout(()=>{try{push()}catch(e){}},300)};document.addEventListener('click',kick,true);document.addEventListener('change',kick,true);document.addEventListener('submit',kick,true);setInterval(()=>{try{if(typeof U!=='undefined'&&U)push()}catch(e){}},5000)}
 // ---- cierre de caja con desglose por método de pago ----
@@ -2574,7 +2597,7 @@ Object.assign(A,{arqCalc(){let sob=0,fal=0,n=0;document.querySelectorAll('#arqm 
 /* 1.5 Tiempo real multidispositivo: canal de difusión (broadcast) para cambios críticos < 500 ms */
 const LV={ch:null,t:null,ok:0};
 function lvSend(ev,p){try{if(LV.ch&&LV.ok)LV.ch.send({type:'broadcast',event:ev,payload:p||{}})}catch(e){}}
-function lvInit(){try{if(typeof SBrc==='undefined'||!SBrc||!SBrc.channel)return;LV.ok=0;LV.ch=SBrc.channel('giandy-live',{config:{broadcast:{self:false}}});
+function lvInit(){try{if(typeof SBrc==='undefined'||!SBrc||!SBrc.channel)return;if(LV.ch&&LV.cl===SBrc)return;LV.cl=SBrc;LV.ok=0;LV.ch=SBrc.channel('giandy-live',{config:{broadcast:{self:false}}});
  LV.ch.on('broadcast',{event:'chg'},()=>{clearTimeout(LV.t);LV.t=setTimeout(async()=>{try{await pullNow();refresh()}catch(e){}},120);setTimeout(async()=>{try{await pullNow();refresh()}catch(e){}},700)})
   .on('broadcast',{event:'dish'},({payload})=>{try{const p=S.productos.find(x=>x.name==(payload||{}).name);if(p){p.on=payload.on?1:0;if(mod=='pos'){grid();cart()}else if(mod=='rec'){V.rec()}else refresh()}}catch(e){}})
   .on('broadcast',{event:'reset'},({payload})=>{try{if(payload&&payload.id){localStorage.removeItem('giandy_incq');rstCheck({id:payload.id})}}catch(e){}})
@@ -2722,7 +2745,7 @@ window.addEventListener('unhandledrejection',e=>{try{if(mod=='qrasist'&&e&&e.rea
 setInterval(()=>{try{if(HW.on&&AS.live){HW.on=0;HW.n=0;hwAlert(0);hwReport('Operativa','Cámara reconectada')}if(mod!='qrasist'&&HW.on){HW.on=0;hwAlert(0)}}catch(e){}},2000);
 
 /* 3.4 Reinicio total corporativo seguro (palabra clave REINICIAR_PROYECTO) con difusión a todas las pantallas */
-Object.assign(A,{projReset(){if(U.r!='Administrador')return toast('Solo el Administrador');modal('Reiniciar sistema desde cero',[{k:'pw',l:'Contraseña del administrador',t:'password'},{k:'w',l:'Se limpia el historial de transacciones (erp_nodes y movimientos_inventario) y cada stock vuelve a su valor inicial en TODOS los equipos. Antes se descarga un respaldo. Escriba exactamente: REINICIAR_PROYECTO (o REINICIAR_SISTEMA)'}],d=>{(async()=>{try{if(U.h!=await hash(d.pw||''))return toast('Contraseña incorrecta');if(!['REINICIAR_PROYECTO','REINICIAR_SISTEMA'].includes((d.w||'').trim()))return toast('Palabra incorrecta: no se reinició nada');if(!SBC)return toast('Sin conexión a la nube: no se puede reiniciar');
+Object.assign(A,{projReset(){if(U.r!='Administrador')return toast('Solo el Administrador');modal('Reiniciar sistema desde cero',[{k:'pw',l:'Contraseña del administrador',t:'password'},{k:'w',l:'Se limpia el historial de transacciones (erp_nodes y movimientos_inventario) y cada stock vuelve a su valor inicial en TODOS los equipos. Antes se descarga un respaldo. Escriba exactamente: REINICIAR_PROYECTO'}],d=>{(async()=>{try{if(U.h!=await hash(d.pw||''))return toast('Contraseña incorrecta');if((d.w||'').trim()!=='REINICIAR_PROYECTO')return toast('Palabra incorrecta: no se reinició nada');if(!SBC)return toast('Sin conexión a la nube: no se puede reiniciar');
  await dlj('respaldo_antes_de_reiniciar_'+new Date().toISOString().slice(0,10),S);NV.q.length=0;nvSave();
  let r=await SBC.rpc('erp_reiniciar',{});if(r.error)throw r.error;
  try{await SBC.from('movimientos_inventario').delete().not('id','is',null)}catch(e){console.warn('movimientos_inventario:',e)}
@@ -2884,6 +2907,31 @@ const stableNow=()=>{try{const m=document.getElementById('mn');return !!(m&&m.ch
 {const _rf=refresh;refresh=function(){if(stableNow()){PERF.skip++;return}PERF.paint++;const r=_rf.apply(this,arguments);try{main.k=paintKey()}catch(e){}return r}}
 {const _sr=syncRun;syncRun=function(){if(stableNow()){PERF.skip++;return}PERF.paint++;const r=_sr.apply(this,arguments);try{main.k=paintKey()}catch(e){}return r}}
 {const d=Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML');if(d&&d.set&&!Element.prototype.__zf){Element.prototype.__zf=1;Object.defineProperty(Element.prototype,'innerHTML',{configurable:true,enumerable:d.enumerable,get:d.get,set:function(v){try{if(this.id!=='mn'&&typeof v==='string'&&v.length<3000&&this.__h===v&&this.isConnected&&this.__n===this.childNodes.length)return}catch(e){}d.set.call(this,v);try{if(typeof v==='string'&&v.length<3000){this.__h=v;this.__n=this.childNodes.length}}catch(e){}}})}}
+
+/* =====================================================================
+   SINCRONIZACIÓN ZERO REBOUND (cliente): validación de transiciones, confirmación de escritura y auditoría de equipo
+   ===================================================================== */
+const COCOK={'Pendiente':['En preparación','Cancelado'],'En preparación':['Listo','Cancelado'],'Listo':['Entregado','Cancelado'],'Entregado':[],'Cancelado':[]};
+{const _ce=A.cocEst;if(typeof _ce=='function')A.cocEst=function(id,n){
+  const v=S.ventas.find(x=>String(x.id)==String(id));
+  if(!v){toast('Ese pedido ya no existe (fue anulado o archivado). Se actualizó la pantalla.');try{V.cocina()}catch(e){}return}
+  const cur=(v.coc&&v.coc.est)||'Pendiente';if(cur===n)return;
+  if(!(COCOK[cur]||[]).includes(n)&&!(U.r=='Administrador'&&n in COCR&&(COCR[n]>=COCR[cur]||cur=='Entregado'))){
+    toast('El pedido ya está en «'+cur+'»'+(v.coc&&v.coc.by?' (cambiado por '+v.coc.by+')':'')+'. No se puede pasar a «'+n+'». Se actualizó la pantalla.');try{V.cocina()}catch(e){}return}
+  PENDW[v.id]=Date.now();return _ce.apply(this,arguments)}}
+
+A.cocReabrir=function(id){if(U.r!='Administrador')return toast('Solo el Administrador puede reabrir un pedido');const v=S.ventas.find(x=>String(x.id)==String(id));if(!v)return toast('Ese pedido ya no existe');
+  const cur=(v.coc&&v.coc.est)||'Pendiente';if(!['Listo','Entregado','Cancelado'].includes(cur))return toast('El pedido ya está activo en «'+cur+'»');
+  modal('Reabrir pedido T-'+String(v.n||0).padStart(6,'0')+' (estaba «'+cur+'»)',[{k:'mo',l:'Motivo (obligatorio)'}],d=>{if(!(d.mo||'').trim())return toast('Indique el motivo');
+    const c=v.coc=v.coc||{est:'Pendiente',h:{}},now=Math.max(Date.now(),cocTsJ(c)+1);c.h=c.h||{};c.ep=(+c.ep||0)+1;c.est='En preparación';c.h['En preparación']=now;c.by=U.u;c.dev=DEVID;
+    (c.log=c.log||[]).push({ts:now,u:U.u,de:cur,a:'En preparación',mo:d.mo.trim(),d:DEVID,ep:c.ep,reabre:1});v.mt=Math.max(now,(+v.mt||0)+1);v.mdev=DEVID;
+    if(v.salon&&v.salon.estado=='Servido')v.salon.estado='En preparación';FB.sent[v.id]=0;PENDW[v.id]=Date.now();
+    aud('Pedido reabierto','T-'+String(v.n||0).padStart(6,'0')+': '+cur+' → En preparación · equipo '+DEVID,d.mo.trim());save();try{V.cocina()}catch(e){}})};
+{const _f=fbReq;fbReq=async function(m,p,d){const ok=await _f.apply(this,arguments);
+  try{const mm=/^\/?ventas\/([^\/]+)$/.exec(String(p||''));if(mm&&m=='PUT'){const id=mm[1];
+    if(ok){if(PENDW[id]){delete PENDW[id];clearTimeout(PENDW.t);PENDW.t=setTimeout(()=>{try{if(mod=='cocina'&&$('#ov').hidden)V.cocina()}catch(e){}},60)}}
+    else if(PENDW[id]&&!(PENDW.w>Date.now()-15000)){PENDW.w=Date.now();toast('No se pudo confirmar el cambio del pedido en la nube. Se reintenta solo; el pedido queda marcado «Enviando…».')}}}catch(e){}
+  return ok}}
 
 </script><style id="capa2026">
 :root{--pr:#8b2bff;--ac:#ffd400;--er:#ff1f4b;--ok:#10b981;--or:#ff8a1f;--cy:#06b6d4;--ease:cubic-bezier(.4,0,.2,1)}
