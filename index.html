@@ -790,11 +790,12 @@ function wts(y,mo,meth,s){const K=y+'-'+mo+'|'+meth+'|'+s;if(WC[K])return WC[K];
   const T=x.reduce((q,v)=>q+v,0);if(T>0)x.forEach((v,i)=>w.push([mk(i+1),v/T]))}
  if(!w.length){const W=wdays(y,mo);if(W.N>0)W.w.slice(0,W.N).forEach(t2=>w.push([t2,1/W.N]))}
  return WC[K]=w}
-function gUnits(ids){WC={};const F={},L={},out=[];S.gastos.forEach(x=>{if(x.anul||!(x.a>0)||!ids.includes(bid(x)))return;const{tipo,meth}=gcls(x);if(MF[x.frec]){const k=x.c+'|'+bid(x)+'|'+x.cat;F[k]=Math.min(F[k]||x.ts,x.ts);if(!L[k]||x.ts>=L[k].x.ts)L[k]={x,tipo,meth}}else out.push({c:x.c,tipo,meth,rec:0,amt:x.a,ts:x.ts,ref:x.mes?new Date(x.mes+'-15T12:00').getTime():0,s:bid(x),x})});
- Object.entries(L).forEach(([k,o])=>out.push({c:o.x.c,tipo:o.tipo,meth:o.meth=='Manual'?'Días trabajados':o.meth,rec:1,mes:o.x.a*MF[o.x.frec],first:F[k],s:bid(o.x),x:o.x}));return out}
+function gUnits(ids){WC={};const F={},L={},out=[];S.gastos.forEach(x=>{if(x.anul||!(x.a>0)||!ids.includes(bid(x)))return;const{tipo,meth}=gcls(x);if(MF[x.frec]){const k=x.c+'|'+bid(x)+'|'+x.cat;F[k]=Math.min(F[k]||x.ts,x.ts);if(!L[k]||x.ts>=L[k].x.ts)L[k]={x,tipo,meth}}else out.push({c:x.c,tipo,meth,rec:0,amt:x.a,ts:x.ts,ref:x.mes?new Date(x.mes+'-15T12:00').getTime():0,s:bid(x),x,rng:(x.ap&&x.ap.d&&x.ap.h)?[new Date(x.ap.d+'T00:00:00').getTime(),new Date(x.ap.h+'T00:00:00').getTime()]:null})});
+ Object.entries(L).forEach(([k,o])=>out.push({c:o.x.c,tipo:o.tipo,meth:o.meth=='Manual'?'Días trabajados':o.meth,rec:1,mes:o.x.a*MF[o.x.frec],first:F[k],s:bid(o.x),x:o.x,end:(o.x.ap&&o.x.ap.h)?new Date(o.x.ap.h+'T23:59:59').getTime():0}));return out}
 function allocUnit(u,a,e){e=Math.min(e,D0(Date.now())+864e5);if(e<=a)return 0;
+ if(u.rng&&u.rng[1]>=u.rng[0]){let s=0;const dd=Math.round((u.rng[1]-u.rng[0])/864e5)+1;for(let t=u.rng[0];t<=u.rng[1];t+=864e5)if(t>=a&&t<e)s+=u.amt/dd;return s}
  if(!u.rec&&u.meth=='Manual')return u.ts>=a&&u.ts<e?u.amt:0;
- let s=0;if(u.rec){let y=new Date(a).getFullYear(),mo=new Date(a).getMonth();const f=new Date(u.first),st=new Date(f.getFullYear(),f.getMonth(),1).getTime();while(new Date(y,mo,1).getTime()<e){if(new Date(y,mo,1).getTime()>=st)wts(y,mo,u.meth,u.s).forEach(([t2,w])=>{if(t2>=a&&t2<e)s+=u.mes*w});if(++mo>11){mo=0;y++}}return s}
+ let s=0;if(u.rec){let y=new Date(a).getFullYear(),mo=new Date(a).getMonth();const f=new Date(u.first),st=new Date(f.getFullYear(),f.getMonth(),1).getTime();while(new Date(y,mo,1).getTime()<e){if(new Date(y,mo,1).getTime()>=st)wts(y,mo,u.meth,u.s).forEach(([t2,w])=>{if(t2>=a&&t2<e&&(!u.end||t2<=u.end))s+=u.mes*w});if(++mo>11){mo=0;y++}}return s}
  const d=new Date(u.ref||u.ts);return wts(d.getFullYear(),d.getMonth(),u.meth,u.s).reduce((q,[t2,w])=>t2>=a&&t2<e?q+u.amt*w:q,0)}
 function gastoAlloc(a,b,ids){const r={fij:0,var:0,hor:0};gUnits(ids).forEach(u=>{r[u.tipo=='Fijo'?'fij':u.tipo=='Variable'?'var':'hor']+=allocUnit(u,a,b)});return r}
 Object.assign(A,{
@@ -3949,6 +3950,712 @@ function wrapSinc(){if(T('V')!=='object'||!E('V').sinc||E('V').sinc.__l)return f
 var hooked=0;setInterval(function(){if(!logged())return;if(!hooked)hooked=wrapResp()&wrapSinc();bell();badge()},1500);
 setInterval(function(){try{BK.tick()}catch(e){}},120000);setTimeout(function(){setInterval(function(){if(logged()&&!BK._f){BK._f=1;setTimeout(function(){BK.tick()},8000)}},3000)},0);
 window.addEventListener('online',function(){badge()});window.addEventListener('offline',function(){badge()});
+})();
+</script>
+
+<script id="capa2026gestion">
+/* GIANCORP · Gestión global · motor de integridad, papelera, dependencias, consistencia, limpieza y vaciado selectivo
+   Bloque ADITIVO: no modifica funciones existentes; solo envuelve push / setKey / onRemote / sbEvt y registra un módulo nuevo.
+   - Papelera: toda eliminación de un registro de catálogo, personal, usuarios, fondos, promociones, recetas, etc. queda recuperable
+   - Dependencias y consistencia: informe de impacto y validación de referencias, con corrección automática de lo seguro
+   - Limpieza y vaciado por área: vista previa, respaldo previo, contraseña y confirmación escrita, propagación a todos los equipos */
+(function(){'use strict';
+var GG={tab:'pap',srv:null,chk:null,chkT:0,busy:0,q:'',col:'clientes'};
+var REM=0,SH=null,SEEN_KEY='giandy_vac_seen',INIT_KEY='giandy_vac_init';
+
+/* ---------- utilidades ---------- */
+function ok(){try{return typeof S==='object'&&S&&typeof U!=='undefined'&&typeof main==='function'&&typeof modal==='function'&&typeof tbl==='function'&&typeof tb==='function'&&typeof HUBS!=='undefined'&&typeof SYNC_KEYS!=='undefined'&&typeof V==='object'}catch(e){return false}}
+function adm(){try{return !!U&&U.r==='Administrador'}catch(e){return false}}
+function arr(x){return Array.isArray(x)?x:(x&&typeof x==='object'?Object.values(x):[])}
+function E(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function now(){return Date.now()}
+function uid(){return now().toString(36)+Math.random().toString(36).slice(2,7)}
+function sbc(){try{return typeof SBC!=='undefined'&&SBC&&typeof FB!=='undefined'&&FB.url?SBC:null}catch(e){return null}}
+function fdt(ts){try{return typeof fd==='function'?fd(ts):new Date(ts).toLocaleString('es-PE')}catch(e){return String(ts)}}
+function say(t){try{toast(t)}catch(e){}}
+function AUD(a,d,mo){try{aud(a,d,mo||'')}catch(e){}}
+async function pwOk(pw){try{return !!U&&U.h===await hash(pw||'')}catch(e){return false}}
+function plural(n,s,p){return n+' '+(n==1?s:p)}
+
+/* ---------- áreas (espejo de la tabla erp_areas del servidor) ---------- */
+var AREAS=[
+ {a:'ventas',n:'Ventas y pedidos',k:['ventas','anuladas'],m:['Caja','Tesorería','Finanzas','Dashboard CEO','Cocina','Entregas','Reportes','Indicadores'],r:'alto'},
+ {a:'compras',n:'Compras y cuentas por pagar',k:['compras','cxp','cxpp'],m:['Inventario','Proveedores','Finanzas','Tesorería','Reportes'],r:'alto'},
+ {a:'gastos',n:'Gastos operativos',k:['gastos'],m:['Finanzas','Caja','Dashboard CEO','Reportes'],r:'alto'},
+ {a:'caja',n:'Cajas, aperturas, movimientos y cierres',k:['cajas','cierres'],m:['Caja','Tesorería','Finanzas','Dashboard CEO'],r:'alto'},
+ {a:'inventario',n:'Movimientos de inventario (el stock vuelve al valor inicial)',k:['kardex','sxlog','lotes','mermas','phist'],m:['Inventario','Recetas','Producción','Compras','Reportes'],r:'alto'},
+ {a:'recetas',n:'Versiones e historial de recetas',k:['recver','rechist','crec'],m:['Recetas','Costeo','Producción'],r:'medio'},
+ {a:'produccion',n:'Planes de producción',k:['prodplan'],m:['Producción','Inventario'],r:'medio'},
+ {a:'clientes',n:'Clientes y cuentas por cobrar',k:['clientes','cxc','cxcp'],m:['POS','Ventas','Finanzas'],r:'alto'},
+ {a:'proveedores',n:'Proveedores',k:['provs'],m:['Compras','Finanzas','Inventario'],r:'alto'},
+ {a:'personal',n:'Fichas de personal',k:['trab'],m:['Recursos Humanos','Asistencias','Planillas','Auditoría'],r:'alto'},
+ {a:'asistencias',n:'Asistencias y solicitudes',k:['asist','asreq'],m:['Recursos Humanos','Planillas'],r:'medio'},
+ {a:'planillas',n:'Planillas y movimientos de nómina',k:['nomv','sueldos'],m:['Recursos Humanos','Finanzas'],r:'alto'},
+ {a:'tesoreria',n:'Bancos, fondos y reglas de tesorería',k:['bmov','fmov','fondos','frules'],m:['Tesorería','Bancos','Finanzas'],r:'alto'},
+ {a:'auditoria',n:'Auditoría del ERP (bitácora de acciones)',k:['audit'],m:['Auditoría','Seguridad'],r:'alto'},
+ {a:'historial',n:'Historiales técnicos (sincronización, escaneos, informes)',k:['synclog','qrlog','rptlog'],m:['Sincronización','Reportes'],r:'bajo'},
+ {a:'notificaciones',n:'Aprobaciones y avisos pendientes',k:['aprob'],m:['Aprobaciones','Centro operativo'],r:'medio'},
+ {a:'configuracion',n:'Historial de versiones de configuración (la configuración vigente no se borra)',k:['cfgver'],m:['Administración'],r:'bajo'}
+];
+function areaBy(a){for(var i=0;i<AREAS.length;i++)if(AREAS[i].a===a)return AREAS[i];return null}
+function cnt(k){
+  if(k==='cajas'){var n=0;try{Object.keys(S.cajas||{}).forEach(function(b){var c=S.cajas[b]||{};n+=arr(c.movs).length+arr(c.cierres).length+(c.open?1:0)})}catch(e){}return n}
+  return arr(S[k]).length}
+function areaCount(A){return A.k.reduce(function(a,k){return a+cnt(k)},0)}
+function emptyKey(k){
+  if(k==='cajas'){var o={};Object.keys(S.cajas||{S01:1}).forEach(function(b){o[b]={open:null,movs:[],cierres:[]}});S.cajas=o}
+  else if(S[k]===undefined||Array.isArray(S[k]))S[k]=[]}
+function slice(A){var o={};A.k.forEach(function(k){o[k]=S[k]===undefined?null:JSON.parse(JSON.stringify(S[k]))});return o}
+
+/* ---------- papelera empresarial (eliminación lógica por detección de bajas) ---------- */
+var PCOLS={bancos:'Cuentas bancarias',clientes:'Clientes',provs:'Proveedores',users:'Usuarios',trab:'Personal',fondos:'Fondos',promos:'Promociones',activos:'Activos',insumos:'Insumos',productos:'Productos',recetas:'Recetas',turnos:'Turnos'};
+function colGet(c){return c==='bancos'?arr(S.cfg&&S.cfg.bancos):arr(S[c])}
+function colRef(c){if(c==='bancos'){S.cfg=S.cfg||{};S.cfg.bancos=arr(S.cfg.bancos);return S.cfg.bancos}S[c]=arr(S[c]);return S[c]}
+function keyOf(x){if(!x||typeof x!=='object')return null;var k=x.id!=null?x.id:x.code!=null?x.code:x.u!=null?x.u:x.name!=null?x.name:x.n!=null?x.n:null;if(k==null&&x.ts!=null&&x.c!=null)k=x.ts+'|'+x.c;return k==null?null:String(k)}
+function nameOf(col,r){return String((r&&(r.name||r.n||r.u||r.code||r.id||r.c))||'(sin nombre)')}
+function snap(){var o={};Object.keys(PCOLS).forEach(function(c){var m={};colGet(c).forEach(function(x){var k=keyOf(x);if(k!=null){try{m[k]=JSON.stringify(x)}catch(e){}}});o[c]=m});return o}
+function papDetect(){
+  if(!ok()||REM||window.__rst||!U)return;
+  if(!SH){SH=snap();return}
+  var changed=false;
+  Object.keys(PCOLS).forEach(function(c){
+    var cur={};colGet(c).forEach(function(x){var k=keyOf(x);if(k!=null)cur[k]=1});
+    var old=SH[c]||{};
+    Object.keys(old).forEach(function(k){if(!cur[k]){try{papAdd(c,k,JSON.parse(old[k]));changed=true}catch(e){}}});
+  });
+  SH=snap();
+  if(changed){try{persist()}catch(e){}}
+}
+function papAdd(col,key,rec){
+  S.papelera=arr(S.papelera);
+  var dp=[];try{dp=depsOf(col,key,rec)}catch(e){}
+  var e={id:'P'+uid(),mot:GG.nextMot||'',col:col,key:key,nom:nameOf(col,rec),ts:now(),by:U.u,dev:(typeof DEV==='function'?DEV():''),rec:rec,deps:dp.slice(0,8)};
+  S.papelera.unshift(e);if(S.papelera.length>300)S.papelera.length=300;
+  S.hist=arr(S.hist);S.hist.unshift({id:'H'+uid(),pid:e.id,col:col,key:key,nom:e.nom,ts:e.ts,by:e.by,dev:e.dev,estado:'En papelera',snap:rec,deps:e.deps.length,mot:e.mot});if(S.hist.length>1500)S.hist.length=1500;S.hist.forEach(function(h,n){if(n>=300&&h.snap&&h.estado!=='En papelera')h.snap=null});
+  if(col==='trab')persDel(key);
+  AUD('Eliminación a papelera',PCOLS[col]+': '+e.nom+' → papelera','Recuperable desde Gestión global'+(dp.length?' · referencias: '+dp.map(function(d){return d.m+' '+d.n}).join(', '):''));
+  say('«'+e.nom+'» pasó a la papelera'+(dp.length?'. Tiene referencias en '+dp.length+' módulo(s): revise Gestión global.':'. Puede restaurarlo en Gestión global.'));
+}
+function papRestore(id){
+  if(!chk('rest'))return;
+  var e=arr(S.papelera).filter(function(x){return x.id===id})[0];if(!e)return;
+  var CR=colRef(e.col);
+  if(CR.some(function(x){return keyOf(x)===e.key}))return say('Ya existe un registro activo con esa clave: no se restauró');
+  var rec=JSON.parse(JSON.stringify(e.rec));
+  try{if((e.col==='insumos'||e.col==='productos')&&typeof wire==='function')rec=wire(rec)||rec}catch(x){}
+  CR.push(rec);
+  S.papelera=S.papelera.filter(function(x){return x.id!==id});
+  histEst(id,'Restaurado');
+  try{autoLink()}catch(x){}
+  AUD('Restauración desde papelera',PCOLS[e.col]+': '+e.nom+' restaurado','Relaciones reconstruidas');
+  try{save()}catch(x){}
+  say('«'+e.nom+'» restaurado');
+  try{refresh()}catch(x){V.gestion()}
+}
+function histEst(pid,est,wipe){arr(S.hist).forEach(function(h){if(h.pid===pid){h.estado=est;h.ts2=now();h.by2=U&&U.u;if(wipe)h.snap=null}})}
+function persDel(id){try{var c=sbc();if(c&&c.from)c.from('personal_erp').delete().eq('id',String(id)).then(function(){},function(){})}catch(e){}}
+function setMot(id){
+  var e=arr(S.papelera).filter(function(x){return x.id===id})[0];if(!e)return;
+  modal('Confirmación · Motivo de eliminación',[{k:'m',l:'Motivo de la eliminación de «'+E(e.nom)+'»',v:e.mot||''}],function(d){e.mot=String(d.m||'').trim();arr(S.hist).forEach(function(h){if(h.pid===id)h.mot=e.mot});AUD('Motivo de eliminación',e.nom,e.mot);save();V.gestion()})}
+function papPurge(id){
+  if(!adm())return say('Solo el Administrador');
+  var e=arr(S.papelera).filter(function(x){return x.id===id})[0];if(!e)return;
+  wizard({t:'Eliminación definitiva',pre:'<p>Esta acción eliminará permanentemente «'+E(e.nom)+'» ('+E(PCOLS[e.col]||e.col)+') y sus datos propios. No podrá revertirse. Las ventas, compras y movimientos históricos no se modifican; solo queda el registro de auditoría de la acción.</p>'+depsHtml(e.deps||[]),ver:true,
+    run:async function(){histEst(id,'Eliminado definitivamente',1);S.papelera=arr(S.papelera).filter(function(x){return x.id!==id});AUD('Eliminación definitiva',PCOLS[e.col]+': '+e.nom,'Autorizada por el Administrador');save();say('Eliminado definitivamente');V.gestion()}});
+}
+function papVaciar(){
+  if(!adm())return say('Solo el Administrador');
+  var n=arr(S.papelera).length;
+  var ids=arr(S.papelera).map(function(x){return x.id});
+  wizard({t:'Vaciar papelera',pre:'<p>Se eliminarán definitivamente <b>'+n+'</b> registro(s) de la papelera.</p>',ver:true,backup:{papelera:S.papelera},bname:'papelera',
+    run:async function(){ids.forEach(function(i){histEst(i,'Eliminado definitivamente',1)});S.papelera=[];AUD('Papelera vaciada',n+' registro(s)','Respaldo descargado');save();say('Papelera vaciada');V.gestion()}});
+}
+
+/* ---------- motor de dependencias ---------- */
+function depsOf(col,key,rec){
+  var o=[],nm=rec&&(rec.name||rec.n),cd=rec&&rec.code;
+  function add(m,n,t){if(n>0)o.push({m:m,n:n,t:t})}
+  var V0=arr(S.ventas);
+  if(col==='clientes'){add('Ventas',V0.filter(function(v){return String(v.cli)===key}).length,'ventas del cliente');add('Cuentas por cobrar',arr(S.cxc).filter(function(c){return String(c.cli)===key}).length,'cuentas por cobrar')}
+  else if(col==='provs'){add('Compras',arr(S.compras).filter(function(c){return c.prov===nm}).length,'compras al proveedor');add('Cuentas por pagar',arr(S.cxp).filter(function(c){return c.acr===nm}).length,'obligaciones');add('Inventario',arr(S.insumos).filter(function(i){return i.prov===nm}).length,'insumos con este proveedor')}
+  else if(col==='insumos'){add('Recetas',arr(S.recetas).filter(function(r){return arr(r.items).some(function(l){return l.ing===nm||l.ins===nm})}).length,'recetas que lo usan');add('Compras',arr(S.compras).filter(function(c){return c.name===nm}).length,'compras');add('Kardex',arr(S.kardex).filter(function(k){return k.code===cd}).length,'movimientos');add('Mermas',arr(S.mermas).filter(function(m2){return m2.name===nm||m2.it===nm}).length,'mermas')}
+  else if(col==='productos'){add('Ventas',V0.filter(function(v){return arr(v.items).some(function(i){return i.code===cd||i.name===nm})}).length,'ventas que lo incluyen');add('Recetas',arr(S.recetas).filter(function(r){return r.name===nm}).length,'receta propia');add('Promociones',arr(S.promos).filter(function(p){return JSON.stringify(p).indexOf(nm)>-1}).length,'promociones')}
+  else if(col==='users'){var u=rec&&rec.u;add('Ventas',V0.filter(function(v){return v.user===u}).length,'ventas registradas');add('Auditoría',arr(S.audit).filter(function(a){return a.user===u}).length,'acciones auditadas');add('Personal',arr(S.trab).filter(function(w){return w.uid===u}).length,'ficha de personal vinculada')}
+  else if(col==='trab'){var id=rec&&rec.id;add('Asistencias',arr(S.asist).filter(function(a){return String(a.tid)===String(id)||String(a.w)===String(id)||String(a.wid)===String(id)}).length,'asistencias');add('Planillas',arr(S.nomv).filter(function(a){return String(a.tid)===String(id)||String(a.w)===String(id)||String(a.wid)===String(id)}).length,'movimientos de nómina');add('Usuarios',arr(S.users).filter(function(x){return rec&&x.u===rec.uid}).length,'usuario del ERP vinculado');add('Kardex',arr(S.kardex).filter(function(k){return k.u&&String(k.u).indexOf('['+id+']')>-1}).length,'movimientos de inventario')}
+  else if(col==='recetas'){add('Productos',arr(S.productos).filter(function(p){return p.name===nm}).length,'producto con esta receta')}
+  else if(col==='bancos'){add('Tesorería',arr(S.bmov).filter(function(x){return JSON.stringify(x).indexOf(nm||'§')>-1}).length,'movimientos bancarios (históricos, no se modifican)')}
+  else if(col==='fondos'){add('Tesorería',arr(S.fmov).filter(function(x){return String(x.f)===key||String(x.fondo)===key||String(x.fid)===key}).length,'movimientos del fondo')}
+  return o}
+function depsHtml(d){return d.length?'<ul style="margin:6px 0 0 18px">'+d.map(function(x){return'<li><b>'+E(x.m)+'</b>: '+x.n+' '+E(x.t)+'</li>'}).join('')+'</ul>':'<p style="color:var(--mu)">Sin referencias en otros módulos.</p>'}
+
+/* ---------- consistencia (cliente) ---------- */
+function runChecks(){
+  var out=[],V0=arr(S.ventas),P=arr(S.productos),I=arr(S.insumos),R=arr(S.recetas);
+  function add(c,sev,n,det,fx){out.push({c:c,s:n?sev:'OK',n:n,d:det,fx:fx||null})}
+  var pk={};P.forEach(function(p){pk[p.code]=1;pk['n:'+p.name]=1});
+  add('Ventas con productos inexistentes','AVISO',V0.filter(function(v){return arr(v.items).some(function(i){return !pk[i.code]&&!pk['n:'+i.name]})}).length,'Productos vendidos que ya no existen en el catálogo');
+  add('Ventas sin detalle','ALERTA',V0.filter(function(v){return !arr(v.items).length}).length,'Cada venta debe tener productos');
+  var seen={},dupI=0;V0.forEach(function(v){var k=String(v.id);if(seen[k])dupI++;seen[k]=1});
+  add('Ventas con identificador duplicado','ALERTA',dupI,'Dos ventas con el mismo ID','dedupVentas');
+  var tn={},dupT=0;V0.forEach(function(v){if(v.n==null)return;var k=v.suc+'|'+v.n;if(tn[k])dupT++;tn[k]=1});
+  add('Tickets duplicados por sucursal','AVISO',dupT,'Mismo número de ticket en una sucursal (cajas sin conexión)');
+  var us={};arr(S.users).forEach(function(u){us[u.u]=1});
+  add('Ventas de usuarios inexistentes','AVISO',V0.filter(function(v){return v.user&&!us[v.user]}).length,'Ventas cuyo usuario fue eliminado');
+  var cl={};arr(S.clientes).forEach(function(c){cl[String(c.id)]=1});
+  add('Ventas con cliente inexistente','AVISO',V0.filter(function(v){return v.cli&&!cl[String(v.cli)]}).length,'Ventas ligadas a un cliente eliminado');
+  var im={};I.forEach(function(i){im[i.name]=1});
+  add('Recetas con insumo inexistente','ALERTA',R.reduce(function(a,r){return a+arr(r.items).filter(function(l){return l.ing&&!im[l.ing]&&!(l.ins&&I.some(function(i){return i.code===l.ins}))}).length},0),'Líneas de receta sin insumo en el inventario','autoLink');
+  var pv={};arr(S.provs).forEach(function(p){pv[p.name]=1});
+  add('Compras con proveedor no registrado','AVISO',arr(S.compras).filter(function(c){return c.prov&&!pv[c.prov]}).length,'Proveedor escrito a mano que no está en Proveedores');
+  var cc={},dc=0;I.concat(P).forEach(function(x){if(x.code==null)return;var k=(x.cuts||'')+x.code;if(cc[x.code+'|'+(P.indexOf(x)>-1?'p':'i')])dc++;cc[x.code+'|'+(P.indexOf(x)>-1?'p':'i')]=1});
+  add('Códigos repetidos en el catálogo','ALERTA',dc,'Dos productos o insumos con el mismo código');
+  var cx={};arr(S.cxc).forEach(function(c){cx[c.id]=1});
+  add('Abonos sin cuenta por cobrar','AVISO',arr(S.cxcp).filter(function(p){return p.cxc!=null&&!cx[p.cxc]}).length,'Abonos cuya cuenta ya no existe','orfCxcp');
+  var fo={};arr(S.fondos).forEach(function(f){fo[String(f.id)]=1});
+  add('Movimientos de fondo sin fondo','AVISO',arr(S.fmov).filter(function(x){var f=x.f!=null?x.f:x.fondo!=null?x.fondo:x.fid;return f!=null&&!fo[String(f)]}).length,'Movimientos cuyo fondo fue eliminado','orfFmov');
+  var pend=0;try{pend=(typeof NV!=='undefined'&&NV.q?NV.q.length:0)+JSON.parse(localStorage.getItem('giandy_opq')||'[]').length}catch(e){}
+  add('Operaciones pendientes de sincronizar','AVISO',pend,'Se enviarán al recuperar la conexión');
+  add('Papelera con registros','AVISO',0,'');
+  return out}
+function fixCheck(fx){
+  var n=0;
+  if(fx==='dedupVentas'){var m={};arr(S.ventas).forEach(function(v){var k=String(v.id),o=m[k];if(!o||(+v.mt||+v.ts||0)>=(+o.mt||+o.ts||0))m[k]=v});var l=Object.keys(m).map(function(k){return m[k]});n=S.ventas.length-l.length;if(n>0){S.ventas=l.sort(function(a,b){return a.ts-b.ts});AUD('Consistencia: ventas duplicadas fusionadas',n+' duplicada(s)','Se conserva la versión más reciente')}}
+  else if(fx==='autoLink'){try{autoLink();AUD('Consistencia: vínculos de recetas recalculados','autoLink','')}catch(e){}}
+  else if(fx==='orfCxcp'){var c={};arr(S.cxc).forEach(function(x){c[x.id]=1});var a=arr(S.cxcp),b=a.filter(function(p){return p.cxc==null||c[p.cxc]});n=a.length-b.length;if(n>0){S.cxcp=b;AUD('Consistencia: abonos huérfanos retirados',n+' abono(s)','Respaldo en papelera de consistencia')}}
+  else if(fx==='orfFmov'){var f={};arr(S.fondos).forEach(function(x){f[String(x.id)]=1});var a2=arr(S.fmov),b2=a2.filter(function(x){var q=x.f!=null?x.f:x.fondo!=null?x.fondo:x.fid;return q==null||f[String(q)]});n=a2.length-b2.length;if(n>0){S.fmov=b2;AUD('Consistencia: movimientos de fondo huérfanos retirados',n+' movimiento(s)','')}}
+  return n}
+function chkSilent(){
+  if(!ok()||!adm())return;
+  try{var dirty=window.__DIRTY|0;if(GG.chkD===dirty&&GG.chk)return;GG.chkD=dirty;
+    var prev=GG.chk?GG.chk.filter(function(x){return x.s==='ALERTA'}).length:0,r=runChecks();GG.chk=r;GG.chkT=now();
+    var cur=r.filter(function(x){return x.s==='ALERTA'}).length;
+    if(GG.chkInit&&cur>prev)say('Consistencia: '+plural(cur-prev,'alerta nueva','alertas nuevas')+'. Revise Gestión global.');
+    GG.chkInit=1}catch(e){}}
+
+/* ---------- asistentes (contraseña + confirmación escrita + respaldo previo) ---------- */
+function wizard(o){
+  if(!anyGG())return say('Solo el Administrador');
+  modal('Confirmación · '+o.t,[{k:'x',l:o.pre+'<small style="color:var(--mu)">Solo el Administrador. Se descargará un respaldo antes de ejecutar y la acción quedará en auditoría.</small>',o:['Cancelar','Continuar'],v:'Cancelar'}],function(d1){
+    if(d1.x!=='Continuar')return;
+    var f=[{k:'pw',l:'Contraseña del administrador',t:'password'}];
+    if(o.ver!==false)f.push({k:'c',l:'Escriba exactamente: CONFIRMAR'});
+    modal('Confirmación · '+o.t,f,function(d){
+      (async function(){
+        try{
+          if(!await pwOk(d.pw))return say('Contraseña incorrecta: no se hizo ningún cambio');
+          if(o.ver!==false&&String(d.c||'').trim().toUpperCase()!=='CONFIRMAR')return say('Palabra incorrecta: no se hizo ningún cambio');
+          if(o.backup){try{await dlj('respaldo_'+(o.bname||'gestion')+'_'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-'),{por:U.u,ts:now(),area:o.bname||'',datos:o.backup})}catch(e){}}
+          await o.run()}catch(e){GG.err=String(e&&e.stack||e);say('No se pudo completar: '+((e&&e.message)||e))}
+      })()})})}
+
+/* ---------- servidor (RPC del motor; si no están instaladas se usa el modo local) ---------- */
+async function rpc(fn,args){var c=sbc();if(!c)return{noCloud:1};try{var r=await c.rpc(fn,args||{});if(r&&r.error){var m=String(r.error.message||''),cd=r.error.code||'';if(cd==='PGRST202'||cd==='42883'||/Could not find the function|does not exist|schema cache/i.test(m))return{noFn:1,error:r.error};return{error:r.error}}return{data:r&&r.data}}catch(e){return{error:{message:(e&&e.message)||String(e)}}}}
+
+/* ---------- difusión a todos los equipos (nodo sys/vaciar) ---------- */
+function vacApply(it,extra){
+  try{var seen=JSON.parse(localStorage.getItem(SEEN_KEY)||'[]');if(seen.indexOf(it.id)>-1)return false;seen.push(it.id);localStorage.setItem(SEEN_KEY,JSON.stringify(seen.slice(-200)))}catch(e){}
+  window.__rst=1;try{FB.ready=false}catch(e){}
+  try{var raw=localStorage.getItem(K),o=raw?JSON.parse(raw):null;
+    if(o){arr(it.claves).forEach(function(k){if(k==='cajas'){var c=o.cajas||{S01:1},n={};Object.keys(c).forEach(function(b){n[b]={open:null,movs:[],cierres:[]}});o.cajas=n}else if(o[k]!==undefined)o[k]=[]});
+      if(extra&&extra.audit&&Array.isArray(o.audit))o.audit.push(extra.audit);
+      localStorage.setItem(K,JSON.stringify(o))}}catch(e){}
+  try{if(arr(it.claves).indexOf('sxlog')>-1){localStorage.removeItem('giandy_incq')}}catch(e){}
+  if(arr(it.claves).indexOf('notificaciones')>-1){}
+  location.reload();return true}
+function vacHandle(data){
+  if(GG.vacBusy)return;
+  try{var items=arr(data&&data.items);if(!items.length&&data&&data.id)items=[data];
+    var init=+localStorage.getItem(INIT_KEY)||0;
+    if(!init){localStorage.setItem(INIT_KEY,String(now()));var s0=[];items.forEach(function(i){s0.push(i.id)});localStorage.setItem(SEEN_KEY,JSON.stringify(s0.slice(-200)));return}
+    items.slice().sort(function(a,b){return (a.ts||0)-(b.ts||0)}).some(function(it){if((it.ts||0)<init)return false;return vacApply(it)})}catch(e){}}
+async function vacPull(){
+  var c=sbc();if(!c||typeof FB==='undefined'||!FB.ready)return false;
+  try{var r=await c.from('erp_nodes').select('data').eq('path','sys/vaciar').limit(1);if(r.error)return true;var d=r.data&&r.data[0]&&r.data[0].data;if(d)vacHandle(d);return true}catch(e){return true}}
+
+/* ---------- vaciado selectivo por área ---------- */
+async function execVaciar(A,a){
+  var id=null;
+  if(a==='inventario'){try{NV.q.length=0;nvSave()}catch(e){}}
+  if(!sbc())return null;
+  var x=await rpc('erp_vaciar_area',{p_area:a,p_confirmar:'CONFIRMAR',p_simular:false,p_usuario:U.u});
+  if(x.data)return 'srv';
+  if(x.noFn){
+    var c=sbc();
+    for(var i=0;i<A.k.length;i++){var k=A.k[i];
+      if(k==='ventas'||(typeof LOGS!=='undefined'&&LOGS.indexOf(k)>-1)){var d=await c.from('erp_nodes').delete().like('path',k+'/%');if(d.error)throw d.error}
+      else{var u=await c.from('erp_nodes').upsert([{path:k,data:k==='cajas'?{}:[]}],{onConflict:'path'});if(u.error)throw u.error}}
+    if(a==='inventario'){var q=await c.rpc('erp_reiniciar',{});if(q.error)throw q.error}
+    if(a==='personal'){await c.from('personal_erp').delete().neq('id','')}
+    var vid=uid(),cur=[];try{var g=await c.from('erp_nodes').select('data').eq('path','sys/vaciar').limit(1);cur=arr(g.data&&g.data[0]&&g.data[0].data&&g.data[0].data.items)}catch(e){}
+    cur.push({id:vid,accion:'vaciar',area:a,claves:A.k,ts:now(),by:U.u});
+    var up=await c.from('erp_nodes').upsert([{path:'sys/vaciar',data:{id:vid,items:cur.slice(-30)}}],{onConflict:'path'});if(up.error)throw up.error;
+    return vid}
+  if(x.error)throw new Error(x.error.message);
+  return null}
+function markSeen(ids){try{var seen=JSON.parse(localStorage.getItem(SEEN_KEY)||'[]');ids.forEach(function(i){if(seen.indexOf(i)<0)seen.push(i)});localStorage.setItem(SEEN_KEY,JSON.stringify(seen.slice(-200)))}catch(e){}}
+async function rpcItems(since){var c=sbc();if(!c)return[];try{var r=await c.from('erp_nodes').select('data').eq('path','sys/vaciar').limit(1);return arr(r.data&&r.data[0]&&r.data[0].data&&r.data[0].data.items).filter(function(i){return (i.ts||0)>=since})}catch(e){return[]}}
+async function vaciarVarias(list){
+  if(!chk('limp'))return;
+  var As=list.map(areaBy).filter(Boolean);if(!As.length)return say('Seleccione al menos un área');
+  var tot=As.reduce(function(a,A){return a+areaCount(A)},0),bk={};As.forEach(function(A){bk[A.a]=slice(A)});
+  var mods={};As.forEach(function(A){A.m.forEach(function(m){mods[m]=1})});
+  var pre='<p><b>'+plural(As.length,'área seleccionada','áreas seleccionadas')+'</b> · '+tot+' registro(s) locales</p><ul style="margin:6px 0 0 18px">'+As.map(function(A){return '<li>'+E(A.n)+': <b>'+areaCount(A)+'</b> (riesgo '+A.r+')</li>'}).join('')+'</ul><p>Módulos que se actualizan: '+Object.keys(mods).map(E).join(', ')+'.</p><p>Se generan respaldos automáticos y el vaciado se propaga a todos los dispositivos. Los datos históricos financieros fuera de estas áreas no se tocan.</p>';
+  wizard({t:'Limpieza administrativa · '+As.length+' área(s)',pre:pre,backup:bk,bname:'limpieza',run:async function(){
+    var t0=now();GG.vacBusy=1;window.__rst=1;try{FB.ready=false}catch(e){}
+    var claves=[],done=[];
+    try{for(var i=0;i<As.length;i++){await execVaciar(As[i],As[i].a);done.push(As[i].a);As[i].k.forEach(function(k){if(claves.indexOf(k)<0)claves.push(k)})}}
+    catch(e){GG.vacBusy=0;window.__rst=0;try{FB.ready=true}catch(z){}if(done.length){AUD('Limpieza administrativa parcial',done.join(', '),'Falló en '+(As[done.length]||{}).a)}throw e}
+    AUD('Limpieza administrativa',As.map(function(A){return A.n}).join(' · ')+' · '+tot+' registro(s)','Respaldos descargados');
+    try{window.__rst=0;persist();window.__rst=1}catch(e){}
+    var its=await rpcItems(t0-5000);markSeen(its.map(function(i){return i.id}));
+    vacApply({id:'loc-'+uid(),accion:'vaciar',area:'varias',claves:claves,ts:now()},As.some(function(A){return A.a==='auditoria'})?{audit:{ts:now(),user:U.u,rol:U.r,acc:'Vaciado de auditoría',det:'Limpieza administrativa',mo:'Respaldo descargado',dev:(typeof DEV==='function'?DEV():'')}}:null)}})}
+async function vaciarArea(a){
+  if(!chk('limp'))return;
+  var A=areaBy(a);if(!A)return;
+  var loc=areaCount(A),sv=null,r=await rpc('erp_vaciar_area',{p_area:a,p_confirmar:null,p_simular:true,p_usuario:U.u});
+  if(r.data)sv=r.data;
+  var pre='<p><b>'+E(A.n)+'</b></p><p>Registros locales: <b>'+loc+'</b>'+(sv?' · en la nube: <b>'+sv.registros+'</b> registro(s) en '+sv.filas+' fila(s)':'')+'</p><p>Módulos que se actualizan: '+A.m.map(E).join(', ')+'.</p><p>Riesgo: <b>'+A.r.toUpperCase()+'</b>. '+(a==='inventario'?'Los movimientos se eliminan y el stock de cada insumo vuelve a su valor inicial.':'Se genera un respaldo automático restaurable.')+'</p>'+(sv?'':'<p style="color:var(--mu)">'+(sbc()?'El motor de la nube no está instalado: se aplicará solo el vaciado compatible.':'Sin conexión a la nube: solo se vacía este equipo.')+'</p>');
+  wizard({t:'Vaciar '+A.n,pre:pre,backup:slice(A),bname:a,run:async function(){
+    var t0=now(),id=null;GG.vacBusy=1;window.__rst=1;try{FB.ready=false}catch(e){}
+    try{id=await execVaciar(A,a)}catch(e){GG.vacBusy=0;window.__rst=0;try{FB.ready=true}catch(z){}throw e}
+    AUD('Vaciado selectivo',A.n+' · '+loc+' registro(s) locales','Respaldo descargado'+(id?' y registrado en la nube':''));
+    try{window.__rst=0;persist();window.__rst=1}catch(e){}
+    var ev={id:id&&id!=='srv'?id:('loc-'+uid()),accion:'vaciar',area:a,claves:A.k,ts:now()};
+    if(id==='srv'){var its=await rpcItems(t0-5000);if(its.length){markSeen(its.map(function(i){return i.id}));ev.id='loc-'+uid()}}
+    vacApply(ev,a==='auditoria'?{audit:{ts:now(),user:U.u,rol:U.r,acc:'Vaciado de auditoría',det:loc+' registro(s) eliminados',mo:'Respaldo descargado y registrado',dev:(typeof DEV==='function'?DEV():'')}}:null);
+  }})}
+async function rpcLatest(){var c=sbc();if(!c)return null;try{var r=await c.from('erp_nodes').select('data').eq('path','sys/vaciar').limit(1);var it=arr(r.data&&r.data[0]&&r.data[0].data&&r.data[0].data.items);return it.length?it[it.length-1]:null}catch(e){return null}}
+
+/* ---------- limpieza guiada ---------- */
+function dupKeys(){var o=[];[['clientes',function(x){return (String(x.name||'')+'|'+String(x.tel||'')).toLowerCase().trim()}],['provs',function(x){return String(x.name||'').toLowerCase().trim()}]].forEach(function(p){var seen={};colGet(p[0]).forEach(function(x){var k=p[1](x);if(!k||k==='|')return;if(seen[k])o.push([p[0],keyOf(x)]);else seen[k]=1})});return o}
+function inactivos(){return colGet('productos').filter(function(p){return p.on===0&&!depsOf('productos',keyOf(p),p).some(function(d){return d.m==='Ventas'})}).map(function(p){return ['productos',keyOf(p)]})}
+var LIMP=[
+ {a:'ventasprueba',n:'Limpiar ventas de prueba',d:'Anula las ventas de prueba que usted identifique (por usuario, texto o fechas) con el procedimiento normal: devuelve el stock, registra el Kardex y deja todo en auditoría.',m:['Caja','Tesorería','Finanzas','Inventario','Reportes'],loc:function(){return arr(S.ventas).filter(function(v){return /prueba|test/i.test(String(v.obs||''))}).length},custom:1},
+ {a:'duplicados',n:'Eliminar duplicados',d:'Clientes (mismo nombre y teléfono) y proveedores (mismo nombre): conserva el primero y envía el resto a la papelera, recuperable.',m:['Clientes','Proveedores','Ventas'],loc:function(){return dupKeys().length},run:async function(){GG.nextMot='Duplicado (limpieza administrativa)';var l=dupKeys();l.forEach(function(x){removeRec(x[0],x[1])});AUD('Limpieza: duplicados',l.length+' registro(s)','En papelera');save();say(l.length+' duplicado(s) enviados a la papelera');V.gestion()},bk:function(){return{duplicados:dupKeys()}}},
+ {a:'inactivos',n:'Limpiar productos inactivos',d:'Productos desactivados que nunca se vendieron: pasan a la papelera. Los que tienen ventas se conservan.',m:['Productos','POS','Recetas'],loc:function(){return inactivos().length},run:async function(){GG.nextMot='Producto inactivo sin ventas (limpieza)';var l=inactivos();l.forEach(function(x){removeRec(x[0],x[1])});AUD('Limpieza: productos inactivos',l.length+' producto(s)','En papelera');save();say(l.length+' producto(s) enviados a la papelera');V.gestion()},bk:function(){return{inactivos:inactivos()}}},
+ {a:'papelera',n:'Vaciar papelera',d:'Elimina definitivamente los registros que están en la papelera.',m:['Gestión global'],loc:function(){return arr(S.papelera).length},run:async function(){arr(S.papelera).forEach(function(x){histEst(x.id,'Eliminado definitivamente',1)});S.papelera=[];save();V.gestion()},bk:function(){return{papelera:S.papelera}}},
+ {a:'historial',n:'Vaciar historial técnico',d:'Registros de sincronización, escaneos e informes. No toca ventas, caja ni inventario.',m:['Sincronización','Reportes'],area:'historial'},
+ {a:'auditoria',n:'Vaciar auditoría',d:'Elimina la bitácora de acciones. Queda constancia de la purga y un respaldo.',m:['Auditoría','Seguridad'],area:'auditoria'},
+ {a:'notificaciones',n:'Vaciar notificaciones y aprobaciones',d:'Avisos locales y aprobaciones pendientes.',m:['Centro operativo','Aprobaciones'],area:'notificaciones',extra:function(){try{localStorage.removeItem('giandy_ntf')}catch(e){}}},
+ {a:'temporales',n:'Vaciar registros temporales',d:'Datos operativos temporales y de diagnóstico en la nube (ops/*, sys/diag).',m:['Sincronización'],srv:'temporales'},
+ {a:'cache',n:'Vaciar caché de este equipo',d:'Estado de pantalla y cachés del navegador. No borra datos del ERP.',m:['Este equipo'],loc:function(){return 0},run:async function(){try{sessionStorage.clear()}catch(e){}try{if(window.caches){var k=await caches.keys();await Promise.all(k.map(function(x){return caches.delete(x)}))}}catch(e){}AUD('Caché vaciada','Este equipo','');say('Caché vaciada');setTimeout(function(){location.reload()},400)}},
+ {a:'huerfanos',n:'Limpiar registros huérfanos',d:'Retira abonos y movimientos de fondo sin cuenta o fondo de origen, y filas relacionales sin origen en la nube.',m:['Cuentas por cobrar','Tesorería'],loc:function(){return runChecks().filter(function(x){return x.fx==='orfCxcp'||x.fx==='orfFmov'}).reduce(function(a,x){return a+x.n},0)},run:async function(){var n=fixCheck('orfCxcp')+fixCheck('orfFmov');await rpc('erp_limpiar',{p_accion:'huerfanos',p_confirmar:'CONFIRMAR',p_simular:false,p_usuario:U.u});save();say(n+' registro(s) huérfano(s) retirados');V.gestion()},bk:function(){return{cxcp:S.cxcp,fmov:S.fmov}}},
+ {a:'optimizar',n:'Optimizar base de datos',d:'Actualiza las estadísticas del planificador de la nube.',m:['Nube'],srv:'optimizar'},
+ {a:'reindexar',n:'Reindexar información',d:'Reconstruye los índices de las tablas principales de la nube.',m:['Nube'],srv:'reindexar'}
+];
+async function limpiar(a){
+  if(!chk('limp'))return;
+  var L=LIMP.filter(function(x){return x.a===a})[0];if(!L)return;
+  if(a==='ventasprueba')return ventasPrueba();
+  if(L.area){return vaciarArea(L.area).then(function(){if(L.extra)L.extra()})}
+  var sv=null,n=L.loc?L.loc():0;
+  if(L.srv){var r=await rpc('erp_limpiar',{p_accion:L.srv,p_confirmar:null,p_simular:true,p_usuario:U.u});if(r.data)sv=r.data;else return say(sbc()?'El motor de la nube no está instalado: ejecute el script SQL completo':'Requiere conexión a la nube');n=sv.registros}
+  wizard({t:L.n,pre:'<p><b>'+E(L.n)+'</b></p><p>'+E(L.d)+'</p><p>Registros afectados: <b>'+n+'</b></p><p>Módulos: '+L.m.map(E).join(', ')+'.</p>'+(sv?'<p>'+E(sv.impacto||'')+'</p>':''),ver:L.a!=='optimizar'&&L.a!=='reindexar',backup:L.bk?L.bk():null,bname:L.a,
+    run:async function(){
+      if(L.srv){var x=await rpc('erp_limpiar',{p_accion:L.srv,p_confirmar:'CONFIRMAR',p_simular:false,p_usuario:U.u});if(x.error)throw new Error(x.error.message);AUD('Limpieza: '+L.n,(x.data&&x.data.registros)+' registro(s)','');say('Listo: '+L.n);V.gestion()}
+      else await L.run()}})}
+
+/* ---------- eliminación por niveles, liquidación, historial permanente ---------- */
+function removeRec(col,key){
+  var ref=colRef(col),i=-1;ref.forEach(function(x,n){if(i<0&&keyOf(x)===String(key))i=n});if(i<0)return null;
+  var rec=JSON.parse(JSON.stringify(ref[i]));papAdd(col,String(key),rec);ref.splice(i,1);try{SH=snap()}catch(e){}
+  GG.nextMot='';return S.papelera.filter(function(e){return e.col===col&&e.key===String(key)})[0]||null}
+function elim(col,key){
+  if(!chk('elim'))return;
+  var x=colGet(col).filter(function(r){return keyOf(r)===String(key)})[0];if(!x)return;
+  var d=depsOf(col,String(key),x),isW=col==='trab';
+  var op=isW?['Liquidar y retirar al historial laboral (recomendado)','Temporal: enviar a la papelera (recuperable)','Definitiva: eliminar de la base operativa']:['Temporal: enviar a la papelera (recuperable)','Operativa: retirar del funcionamiento y conservar solo en el historial permanente','Definitiva: eliminar de la base operativa'];
+  modal('Confirmación · Eliminar '+(PCOLS[col]||col),[{k:'mot',l:'Motivo de la eliminación (obligatorio)',v:''},{k:'x',l:'<b>'+E(nameOf(col,x))+'</b>'+depsHtml(d)+'<small style="color:var(--mu)">Las ventas, compras, pagos y movimientos ya registrados no se modifican: permanecen congelados en su historial.</small><br>Nivel de eliminación',o:op,v:op[0]}],function(r){
+    if(!String(r.mot||'').trim())return say('Indique el motivo de la eliminación');GG.nextMot=String(r.mot).trim();
+    var n=op.indexOf(r.x);
+    if(isW&&n===0)return liquidar(key);
+    var temp=(isW?n===1:n===0),oper=(!isW&&n===1);
+    if(temp){return wizard({t:'Eliminación temporal',pre:'<p>«'+E(nameOf(col,x))+'» saldrá del funcionamiento y quedará en la papelera, donde se puede restaurar.</p>',ver:false,run:async function(){removeRec(col,key);AUD('Eliminación temporal',PCOLS[col]+': '+nameOf(col,x),'En papelera');save();say('Enviado a la papelera');V.gestion()}})}
+    if(oper){return wizard({t:'Eliminación operativa',pre:'<p>«'+E(nameOf(col,x))+'» saldrá por completo del funcionamiento y no ocupará espacio en la papelera. Su ficha queda en el historial permanente y la auditoría.</p>'+depsHtml(d),ver:false,run:async function(){var pe=removeRec(col,key);if(pe){histEst(pe.id,'Retirado del funcionamiento (operativa)');S.papelera=S.papelera.filter(function(e){return e.id!==pe.id})}AUD('Eliminación operativa',PCOLS[col]+': '+nameOf(col,x),'Conservado en el historial permanente');save();say('Retirado del funcionamiento');V.gestion()}})}
+    if(!adm())return say('La eliminación definitiva es solo del Administrador');
+    wizard({t:'Eliminación definitiva',pre:'<p>Esta acción eliminará permanentemente «'+E(nameOf(col,x))+'» de la base operativa. No podrá revertirse. Solo quedará el registro de auditoría.</p>'+depsHtml(d),ver:true,backup:{col:col,registro:x,dependencias:d},bname:'eliminacion',run:async function(){
+      var pe=removeRec(col,key);if(pe){histEst(pe.id,'Eliminado definitivamente',1);S.papelera=S.papelera.filter(function(e){return e.id!==pe.id})}
+      fixCheck('orfCxcp');fixCheck('orfFmov');AUD('Eliminación definitiva',PCOLS[col]+': '+nameOf(col,x),'Autorizada por el Administrador');save();say('Eliminado definitivamente');V.gestion()}})
+  })}
+function dEs(ts){return ts?new Date(ts).toLocaleDateString('es-PE'):'—'}
+function liquidar(key){
+  if(!adm())return say('Solo el Administrador');
+  var w=arr(S.trab).filter(function(x){return String(x.id)===String(key)})[0];if(!w)return;
+  var hoy=new Date().toISOString().slice(0,10);
+  var info='<b>'+E(w.n)+'</b> · '+E(w.cargo||'')+' · ingreso: '+dEs(w.alta)+' · sueldo S/ '+(+w.sueldo||0).toFixed(2);
+  modal('Liquidar personal',[
+   {k:'f',l:info+'<br>Fecha de salida',t:'date',v:hoy},
+   {k:'mot',l:'Motivo de salida',o:['Renuncia','Fin de contrato','Mutuo acuerdo','Despido','Reemplazo por otro trabajador','Otro'],v:'Renuncia'},
+   {k:'pend',l:'Pagos pendientes (S/)',t:'number',v:0},{k:'ben',l:'Beneficios (S/)',t:'number',v:0},{k:'comp',l:'Compensaciones y remuneraciones adicionales (S/)',t:'number',v:0},{k:'desc',l:'Descuentos (S/)',t:'number',v:0},{k:'obs',l:'Observaciones',v:''}],
+  function(d){
+    if(!d.f)return say('Indique la fecha de salida');
+    var tot=(+d.pend||0)+(+d.ben||0)+(+d.comp||0)-(+d.desc||0);
+    var sal=new Date(d.f+'T12:00:00').getTime(),dias=w.alta?Math.max(0,Math.round((sal-w.alta)/864e5)):null;
+    var dp=depsOf('trab',String(w.id),w);
+    wizard({t:'Liquidación de personal',pre:'<p>'+info+'</p><p>Salida: <b>'+dEs(sal)+'</b>'+(dias!=null?' · tiempo trabajado: <b>'+dias+' días</b>':'')+' · motivo: '+E(d.mot)+'</p><p>Total de la liquidación: <b>S/ '+tot.toFixed(2)+'</b></p>'+depsHtml(dp)+'<p>El trabajador deja de ser activo, pasa al historial laboral y la liquidación queda cerrada y bloqueada. Nóminas, asistencias y pagos anteriores no se modifican. El usuario del sistema vinculado se desactiva (si no es Administrador).</p>',backup:{trabajador:w,liquidacion:d},bname:'liquidacion',
+     run:async function(){
+       var asN=arr(S.asist).filter(function(a){return String(a.tid)===String(w.id)}).length,nvN=arr(S.nomv).filter(function(a){return String(a.wid)===String(w.id)}).length,lid='L'+uid(),snapW=JSON.parse(JSON.stringify(w));
+       S.liq=arr(S.liq);S.histper=arr(S.histper);S.hist=arr(S.hist);
+       S.liq.unshift({id:lid,wid:w.id,cod:w.cod||'',nom:w.n,cargo:w.cargo||'',ingreso:w.alta||null,salida:sal,dias:dias,motivo:d.mot,pend:+d.pend||0,ben:+d.ben||0,comp:+d.comp||0,desc:+d.desc||0,total:+tot.toFixed(2),obs:d.obs||'',by:U.u,ts:now(),dev:(typeof DEV==='function'?DEV():''),estado:'Cerrada',lock:1});
+       S.histper.unshift({id:'HP'+uid(),wid:w.id,cod:w.cod||'',nom:w.n,cargo:w.cargo||'',area:w.area||'',suc:w.suc||'',sueldo:+w.sueldo||0,ingreso:w.alta||null,salida:sal,motivo:d.mot,liq:lid,asist:asN,nomv:nvN,snap:snapW,by:U.u,ts:now()});
+       S.hist.unshift({id:'H'+uid(),pid:null,col:'trab',key:String(w.id),nom:w.n,ts:now(),by:U.u,dev:(typeof DEV==='function'?DEV():''),estado:'Liquidado',snap:null,deps:dp.length});
+       var i=S.trab.findIndex(function(x){return String(x.id)===String(w.id)});if(i>-1)S.trab.splice(i,1);
+       try{SH=snap()}catch(e){}persDel(w.id);
+       if(w.uid){var u=arr(S.users).filter(function(x){return x.u===w.uid})[0];if(u&&u.r!=='Administrador'&&u.u!==U.u)u.on=0}
+       AUD('Liquidación de personal',w.n+' · total S/ '+tot.toFixed(2)+' · '+d.mot,'Cerrada y bloqueada · '+asN+' asistencias y '+nvN+' movimientos de nómina conservados');
+       save();say('Liquidación registrada: '+w.n+' pasó al historial laboral');GG.tab='per';V.gestion()}})
+  })}
+function reincorporar(hid){
+  if(!adm())return say('Solo el Administrador');
+  var h=arr(S.histper).filter(function(x){return x.id===hid})[0];if(!h||!h.snap)return;
+  if(arr(S.trab).some(function(w){return String(w.id)===String(h.wid)}))return say('Ya está activo');
+  wizard({t:'Reincorporar personal',pre:'<p>Se devolverá a «'+E(h.nom)+'» al personal activo con su ficha anterior. Su liquidación permanece cerrada. Si desea un trabajador nuevo sin datos anteriores, créelo desde Recursos Humanos con «+ Trabajador».</p>',ver:false,run:async function(){
+    var r=JSON.parse(JSON.stringify(h.snap));r.on=1;S.trab.push(r);h.reinc=now();h.reincBy=U.u;try{SH=snap()}catch(e){}
+    AUD('Reincorporación de personal',h.nom,'Desde el historial laboral');save();say('Reincorporado');V.gestion()}})}
+function liqVer(id){
+  var l=arr(S.liq).filter(function(x){return x.id===id})[0];if(!l)return;
+  var h='<b>'+E(l.nom)+'</b> · '+E(l.cargo)+'<ul style="margin:6px 0 0 18px"><li>Ingreso: '+dEs(l.ingreso)+'</li><li>Salida: '+dEs(l.salida)+(l.dias!=null?' ('+l.dias+' días)':'')+'</li><li>Motivo: '+E(l.motivo)+'</li><li>Pagos pendientes: S/ '+l.pend.toFixed(2)+'</li><li>Beneficios: S/ '+l.ben.toFixed(2)+'</li><li>Compensaciones: S/ '+l.comp.toFixed(2)+'</li><li>Descuentos: S/ '+l.desc.toFixed(2)+'</li><li><b>Total: S/ '+l.total.toFixed(2)+'</b></li><li>Observaciones: '+E(l.obs||'—')+'</li><li>Registrada por '+E(l.by)+' el '+fdt(l.ts)+'</li></ul><small>Estado: '+E(l.estado)+' y bloqueada contra cambios.</small>';
+  modal('Confirmación · Liquidación cerrada',[{k:'x',l:h,o:['Cerrar'],v:'Cerrar'}],function(){})}
+function histRestore(hid){
+  if(!chk('rest'))return;
+  var h=arr(S.hist).filter(function(x){return x.id===hid})[0];if(!h||!h.snap)return;
+  if(h.pid&&arr(S.papelera).some(function(e){return e.id===h.pid}))return papRestore(h.pid);
+  var CR=colRef(h.col);if(CR.some(function(x){return keyOf(x)===h.key}))return say('Ya existe un registro activo con esa clave');
+  CR.push(JSON.parse(JSON.stringify(h.snap)));h.estado='Restaurado';h.ts2=now();h.by2=U.u;try{SH=snap()}catch(e){}
+  try{autoLink()}catch(e){}AUD('Restauración desde historial permanente',PCOLS[h.col]+': '+h.nom,'');save();say('Restaurado');V.gestion()}
+
+/* ---------- puntos de restauración y recuperación por módulo desde archivo ---------- */
+function puntoCrear(nota,cb){
+  if(!chk('rstm'))return;
+  var run=async function(n){try{if(typeof A!=='undefined'&&A.backup)await A.backup()}catch(e){}
+    S.puntos=arr(S.puntos);var c={};AREAS.forEach(function(a){c[a.a]=areaCount(a)});S.puntos.unshift({id:'R'+uid(),ts:now(),by:U.u,nota:n||'',dev:(typeof DEV==='function'?DEV():''),cnt:c});if(S.puntos.length>100)S.puntos.length=100;
+    AUD('Punto de restauración',n||'(sin nota)','Respaldo completo descargado');save();say('Punto de restauración creado y respaldo descargado');if(cb)cb();else V.gestion()};
+  if(nota!=null)return run(nota);
+  modal('Confirmación · Punto de restauración',[{k:'n',l:'Nota del punto de restauración (por ejemplo: antes del cierre mensual)',v:''}],function(d){run(d.n)})}
+function restFile(){
+  if(!chk('rstm'))return;
+  var inp=document.createElement('input');inp.type='file';inp.accept='.json';
+  inp.onchange=function(){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(){
+    try{var o=JSON.parse(r.result),D=o&&o.datos&&typeof o.datos==='object'?o.datos:o,flat={};
+      Object.keys(D).forEach(function(k){var v=D[k];if(areaBy(k)&&v&&typeof v==='object'&&!Array.isArray(v)&&k!=='cajas'){Object.keys(v).forEach(function(q){flat[q]=v[q]})}else flat[k]=v});
+      var allow={papelera:1,hist:1,liq:1,histper:1};AREAS.forEach(function(A){A.k.forEach(function(k){allow[k]=1})});
+      var keys=Object.keys(flat).filter(function(k){return allow[k]&&flat[k]!=null});
+      if(!keys.length)return say('El archivo no contiene módulos recuperables');
+      var pre='<p>Archivo: <b>'+E(f.name)+'</b></p><p>Se reemplazará el contenido actual de estos módulos por el del archivo:</p><ul style="margin:6px 0 0 18px">'+keys.map(function(k){var n=Array.isArray(flat[k])?flat[k].length:(flat[k]&&typeof flat[k]==='object'?Object.keys(flat[k]).length:1);return '<li>'+E(k)+': '+n+' registro(s) en el archivo · '+cnt(k)+' actuales</li>'}).join('')+'</ul><p>No se tocan usuarios ni configuración.</p>';
+      var cur={};keys.forEach(function(k){cur[k]=S[k]===undefined?null:JSON.parse(JSON.stringify(S[k]))});
+      wizard({t:'Recuperación de módulos desde archivo',pre:pre,backup:cur,bname:'antes_de_recuperar',run:async function(){keys.forEach(function(k){S[k]=flat[k]});try{SH=snap()}catch(e){}AUD('Recuperación de módulos desde archivo',f.name+' · '+keys.join(', '),'Respaldo previo descargado');save();say('Módulos recuperados: '+keys.length);try{refresh()}catch(e){}V.gestion()}})
+    }catch(e){say('Archivo no válido')}};r.readAsText(f)};
+  inp.click()}
+
+/* ---------- vistas nuevas ---------- */
+function daysIn(ts){var d=Math.floor((now()-ts)/864e5);return d<=0?'hoy':d+' d'}
+function vHis(){
+  var q=(GG.hq||'').toLowerCase(),fd0=GG.hf?new Date(GG.hf+'T00:00:00').getTime():0,fd1=GG.ht?new Date(GG.ht+'T23:59:59').getTime():9e15,mc=GG.hm||'';
+  var L=arr(S.hist).filter(function(h){return inPer(h.ts)&&(!mc||h.col===mc)&&h.ts>=fd0&&h.ts<=fd1&&(!q||(String(h.nom)+' '+h.by+' '+h.estado+' '+(PCOLS[h.col]||h.col)).toLowerCase().indexOf(q)>-1)});
+  var sel='<select style="width:auto" onchange="GG_.hset(\'hm\',this.value)"><option value="">Todos los módulos</option>'+Object.keys(PCOLS).map(function(c){return '<option value="'+c+'" '+(c===mc?'selected':'')+'>'+E(PCOLS[c])+'</option>'}).join('')+'</select>';
+  return '<div class="cd"><h3 style="margin-top:0">Historial permanente</h3><p style="color:var(--mu)">Todo lo que sale del funcionamiento actual queda aquí, separado de la información activa. Ciclo de vida: Activo, Archivado, En papelera, Restaurado, Retirado del funcionamiento, Liquidado, Eliminado definitivamente. Cada cambio de estado también queda en la auditoría.</p><div class="rw" style="gap:8px;margin-bottom:8px;flex-wrap:wrap">'+sel+'<input placeholder="Buscar nombre, usuario o estado…" value="'+E(GG.hq||'')+'" style="max-width:240px" onchange="GG_.hset(\'hq\',this.value)"><input type="date" style="width:auto" value="'+E(GG.hf||'')+'" onchange="GG_.hset(\'hf\',this.value)"><input type="date" style="width:auto" value="'+E(GG.ht||'')+'" onchange="GG_.hset(\'ht\',this.value)"></div>'+
+   tbl(['Fecha','Módulo','Registro','Usuario','Equipo','Estado','Acciones'],L.slice(0,200).map(function(h){var can=h.snap&&h.estado!=='Restaurado'&&h.estado!=='Liquidado';return [fdt(h.ts),E(PCOLS[h.col]||h.col),'<b>'+E(h.nom)+'</b>',E(h.by||''),'<small>'+E(h.dev||'')+'</small>',E(h.estado)+(h.ts2?'<br><small>'+fdt(h.ts2)+' · '+E(h.by2||'')+'</small>':''),can?btn('Restaurar',"GG_.hrest('"+h.id+"')",''):'<small style="color:var(--mu)">—</small>']}))+'<p><small>'+L.length+' registro(s)'+(L.length>200?' (se muestran 200)':'')+'</small></p></div>'}
+function vPer(){
+  var T=arr(S.trab),Q=arr(S.liq).filter(function(l){return inPer(l.ts)}),H=arr(S.histper).filter(function(h){return inPer(h.ts)});
+  return '<div class="cd"><h3 style="margin-top:0">Personal activo</h3><p style="color:var(--mu)">Para dar de baja a un trabajador use <b>Liquidar</b>: pasa al historial laboral sin alterar nóminas, asistencias ni pagos anteriores. Para un reemplazo sin arrastrar datos antiguos, cree un trabajador nuevo desde Recursos Humanos con «+ Trabajador».</p>'+
+   tbl(['Código','Trabajador','Cargo','Ingreso','Sueldo','Acciones'],T.map(function(w){return [E(w.cod||''),'<b>'+E(w.n)+'</b>',E(w.cargo||''),dEs(w.alta),'S/ '+(+w.sueldo||0).toFixed(2),btn('Liquidar',"GG_.liq('"+E(String(w.id))+"')",'r')+' '+btn('Impacto',"GG_.impact('trab','"+E(String(w.id))+"')",'')]}))+'</div>'+
+   '<div class="cd" style="margin-top:12px"><h3 style="margin-top:0">Liquidaciones cerradas</h3>'+tbl(['Fecha','Trabajador','Salida','Motivo','Total','Registró',''],Q.map(function(l){return [fdt(l.ts),'<b>'+E(l.nom)+'</b>',dEs(l.salida),E(l.motivo),'S/ '+l.total.toFixed(2),E(l.by),btn('Ver',"GG_.liqv('"+l.id+"')",'')+' <small style="color:var(--mu)">bloqueada</small>']}))+'</div>'+
+   '<div class="cd" style="margin-top:12px"><h3 style="margin-top:0">Historial laboral</h3>'+tbl(['Trabajador','Cargo','Ingreso','Salida','Último sueldo','Asistencias','Mov. nómina','Estado',''],H.map(function(h){return ['<b>'+E(h.nom)+'</b>',E(h.cargo),dEs(h.ingreso),dEs(h.salida),'S/ '+(+h.sueldo||0).toFixed(2),h.asist,h.nomv,h.reinc?'Reincorporado '+dEs(h.reinc):'Retirado',h.reinc?'':btn('Reincorporar',"GG_.reinc('"+h.id+"')",'')]}))+'</div>'}
+function vRst(){
+  var P=arr(S.puntos).filter(function(p){return inPer(p.ts)});
+  function card(t,d,b){return '<div class="cd"><h4 style="margin-top:0">'+t+'</h4><p style="color:var(--mu)">'+d+'</p>'+b+'</div>'}
+  return '<div class="g2">'+
+   card('Punto de restauración','Descarga un respaldo completo del ERP y deja constancia del punto con las cantidades de cada área.',btn('Crear punto de restauración',"GG_.punto()",''))+
+   card('Recuperar módulos desde un archivo','Elija un respaldo (punto de restauración o respaldo previo de una limpieza) y recupere solo los módulos que contiene, sin tocar usuarios ni configuración.',btn('Elegir archivo…',"GG_.restf()",''))+
+   card('Restablecer un módulo','Vacía únicamente el área elegida, con respaldo, y actualiza los módulos relacionados en todos los dispositivos. Los usuarios se restablecen conservando siempre a los administradores; la configuración se restablece desde Apariencia o el restablecimiento general.',btn('Inventario',"GG_.vaciar('inventario')",'r')+' '+btn('Recetas',"GG_.vaciar('recetas')",'r')+' '+btn('Personal',"GG_.vaciar('personal')",'r')+' '+btn('Ventas',"GG_.vaciar('ventas')",'r')+' '+btn('Apariencia',"go('visual')",'g')+' '+btn('Usuarios (conserva administradores)',"GG_.rstu()",'r'))+
+   card('Restablecimiento general','Crea primero un punto de restauración y abre el asistente de restablecimiento por etapas (contraseña y confirmaciones).',btn('Crear punto y restablecer…',"GG_.rstGen()",'r'))+'</div>'+
+   '<div class="cd" style="margin-top:12px"><h3 style="margin-top:0">Puntos de restauración registrados</h3>'+tbl(['Fecha','Usuario','Nota','Equipo','Registros'],P.map(function(p){var n=0;Object.keys(p.cnt||{}).forEach(function(k){n+=p.cnt[k]});return [fdt(p.ts),E(p.by),E(p.nota||''),'<small>'+E(p.dev||'')+'</small>',n]}))+'<p><small>El archivo de cada punto se descargó en el equipo donde se creó.</small></p></div>'}
+
+/* ---------- permisos por acción (configurables) ---------- */
+var ACC=[['edit','Editar datos con control de cambios'],['hist','Modificar información histórica (nivel rojo)'],['elim','Eliminar (temporal y operativa)'],['rest','Restaurar desde papelera e historial'],['limp','Limpieza y vaciado de áreas'],['rstm','Restablecer módulos, puntos y recuperación']];
+function can(a){try{if(!U)return false;if(U.r==='Administrador')return true;var g=(S.cfg&&S.cfg.gg)||{};return arr(g[a]).indexOf(U.r)>-1}catch(e){return false}}
+function anyGG(){return adm()||ACC.some(function(x){return can(x[0])})}
+function chk(a){if(can(a))return true;say('Su perfil no tiene permiso para esta acción');return false}
+/* ---------- edición controlada: semáforo, previsualización, versiones ---------- */
+var EDC={ventas:'Ventas',compras:'Compras',gastos:'Gastos',productos:'Productos',insumos:'Insumos',clientes:'Clientes',provs:'Proveedores',fondos:'Fondos',promos:'Promociones',trab:'Personal',bancos:'Cuentas bancarias'};
+var EDIMP={ventas:['Caja','Tesorería','Finanzas','Dashboard CEO','Inventario','Reportes'],compras:['Inventario','Finanzas','Cuentas por pagar','Reportes'],gastos:['Finanzas','Caja','Dashboard CEO','Reportes','Tesorería'],productos:['Punto de venta','Recetas','Costeo','Rentabilidad','Dashboard CEO'],insumos:['Inventario','Recetas','Costeo','Producción','Compras'],clientes:['Punto de venta','Cuentas por cobrar'],provs:['Compras','Cuentas por pagar','Inventario'],fondos:['Tesorería','Finanzas'],promos:['Punto de venta','Rentabilidad'],trab:['Recursos Humanos','Asistencias','Planillas','Costo laboral'],bancos:['Tesorería','Finanzas','Conciliación']};
+var FINF=/(precio|price|cost|monto|^a$|sueldo|^hx$|total|saldo|pct|porc|margen|min$|desc$|frec|^mes$|rate|tasa|comision)/i;
+var SKIP=/^(id|ts|by|s|suc|mod|modBy|per|ap|stock|sx|items|h|pinH|uid|anul|arch|susp|cxp|combo|fotos?|img|__.*)$/i;
+function scal(r){var o=[];Object.keys(r||{}).forEach(function(k){if(SKIP.test(k))return;var t=typeof r[k];if(t==='string'||t==='number')o.push(k)});return o.slice(0,14)}
+function recDate(col,r){var d=r&&(r.ts||r.alta||r.desde);return typeof d==='number'?d:null}
+function cerrado(ts){if(!ts)return false;return arr(S.cierres).some(function(c){return c&&c.desde<=ts&&ts<=c.hasta})}
+function nivel(col,r,ch){
+  var fin=ch.some(function(c){return FINF.test(c.k)}),d=recDate(col,r),viejo=d&&(now()-d>35*864e5)&&(col==='gastos'||col==='trab'||col==='ventas'||col==='compras');
+  if(fin&&(cerrado(d)||viejo))return{n:'rojo',c:'#dc2626',t:'Este dato pertenece a un periodo cerrado o antiguo. La modificación puede afectar reportes históricos y financieros. Revise cuidadosamente antes de continuar.'};
+  if(fin||(col!=='clientes'&&col!=='promos'&&ch.some(function(c){return !/^(name|n|obs|nota|tel|dir|email|cargo|area)$/i.test(c.k)})))return{n:'amarillo',c:'#d9a400',t:'Esta modificación afectará información relacionada.'};
+  return{n:'verde',c:'#16a34a',t:'Modificación segura: datos descriptivos sin impacto crítico.'}}
+function vrs(col,key){return arr(S.versiones).filter(function(v){return v.col===col&&v.key===String(key)})}
+function propose(col,key,vals,mot,ap,tipo0){
+  var r=colGet(col).filter(function(x){return keyOf(x)===String(key)})[0];if(!r)return say('Registro no encontrado');
+  var ch=[];Object.keys(vals).forEach(function(k){var a=r[k],b=vals[k];if(typeof a==='number')b=+b;if(String(a==null?'':a)!==String(b==null?'':b))ch.push({k:k,a:a,b:b})});
+  if(ap&&(ap.d||ap.h)){ch.push({k:'ap',a:r.ap?JSON.stringify(r.ap):'(sin periodo)',b:JSON.stringify(ap)})}
+  if(!ch.length)return say('No hay cambios que guardar');
+  var lv=nivel(col,r,ch),rows=ch.map(function(c){return '<tr><td>'+E(c.k)+'</td><td>'+E(c.a)+'</td><td><b>'+E(c.b)+'</b></td></tr>'}).join('');
+  var h='<div style="border-left:6px solid '+lv.c+';padding:6px 10px;margin-bottom:8px"><b style="color:'+lv.c+'">Nivel '+lv.n.toUpperCase()+'</b><br>'+E(lv.t)+'</div><b>'+E(nameOf(col,r))+'</b> ('+E(EDC[col]||col)+')<table style="width:100%;margin-top:6px"><tr><th align="left">Campo</th><th align="left">Información actual</th><th align="left">Nueva información</th></tr>'+rows+'</table><p><b>Impacto:</b> '+(EDIMP[col]||[]).map(E).join(', ')+'</p><p><b>Responsable:</b> '+E(U.u)+' · <b>Fecha:</b> '+fdt(now())+'</p>'+(mot?'<p><b>Motivo:</b> '+E(mot)+'</p>':'');
+  var op=['Confirmar modificación','Guardar como nueva versión','Cancelar'];
+  modal('Confirmación · Previsualización del cambio',[{k:'x',l:h,o:op,v:tipo0||op[0]}],function(d){
+    if(d.x===op[2])return;
+    var tipo=d.x===op[1]?'versión':'modificación';
+    var go=function(){applyEdit(col,r,ch,tipo,mot,ap)};
+    if(lv.n==='rojo'){if(!chk('hist'))return;return wizard({t:'Modificación de información histórica',pre:'<p>Nivel ROJO: se requiere su contraseña para continuar.</p>',ver:false,run:async function(){go()}})}
+    go()})}
+function applyEdit(col,r0,ch,tipo,mot,ap){
+  var key=keyOf(r0),r=colGet(col).filter(function(x){return keyOf(x)===String(key)})[0];if(!r)return say('El registro ya no existe');
+  S.versiones=arr(S.versiones);var prev=vrs(col,key);
+  if(!prev.length){var orig={};scal(r).forEach(function(k){orig[k]=r[k]});if(r.ap)orig.ap=r.ap;S.versiones.unshift({id:'V'+uid(),col:col,key:String(key),nom:nameOf(col,r),ver:1,tipo:'original',ts:r.mod||r.ts||now(),by:r.modBy||r.by||'',mot:'Estado inicial',datos:orig,campos:[]})}
+  var before={},after={};
+  ch.forEach(function(c){before[c.k]=c.a;after[c.k]=c.b;
+    if(c.k==='ap'){try{r.ap=JSON.parse(c.b)}catch(e){}return}
+    r[c.k]=typeof c.a==='number'?(+c.b||0):c.b});
+  if(ap&&ap.d){var t=new Date(ap.d+'T12:00:00').getTime();if(t&&(col==='gastos'))r.ts=t}
+  r.mod=now();r.modBy=U.u;r.per=new Date(recDate(col,r)||now()).toISOString().slice(0,7);
+  var d={};scal(r).forEach(function(k){d[k]=r[k]});if(r.ap)d.ap=r.ap;
+  S.versiones.unshift({id:'V'+uid(),col:col,key:String(key),nom:nameOf(col,r),ver:prev.length+(prev.length?1:2),tipo:tipo,ts:now(),by:U.u,dev:(typeof DEV==='function'?DEV():''),mot:mot||'',datos:d,campos:ch.map(function(c){return c.k}),antes:before});
+  if(S.versiones.length>1500)S.versiones.length=1500;
+  try{if(col==='insumos'||col==='productos'||col==='recetas')autoLink()}catch(e){}
+  try{SH=snap()}catch(e){}
+  AUD((tipo==='versión'?'Nueva versión: ':'Modificación controlada: ')+(EDC[col]||col)+' · '+nameOf(col,r),JSON.stringify(before).slice(0,300)+' → '+JSON.stringify(after).slice(0,300),'Motivo: '+(mot||'—'));
+  save();say('Cambio aplicado');try{refresh()}catch(e){}V.gestion()}
+function editStart(col,key){
+  if(!chk('edit'))return;
+  var r=colGet(col).filter(function(x){return keyOf(x)===String(key)})[0];if(!r)return;
+  var f=scal(r).map(function(k){return{k:'f_'+k,l:k,t:typeof r[k]==='number'?'number':'text',v:r[k]}});
+  if(col==='gastos'){f.push({k:'ap_d',l:'Aplicar desde (fecha de inicio)',t:'date',v:r.ap&&r.ap.d||(r.ts?new Date(r.ts).toISOString().slice(0,10):'')},{k:'ap_h',l:'Aplicar hasta (fecha final, opcional)',t:'date',v:r.ap&&r.ap.h||''},{k:'ap_a',l:'Alcance',o:['Solo este periodo','Desde esa fecha en adelante (meses futuros)'],v:r.ap&&r.ap.a||'Solo este periodo'})}
+  f.push({k:'mot',l:'Motivo del cambio (obligatorio)',v:''});
+  modal('Control de cambios · '+nameOf(col,r),f,function(d){
+    if(!String(d.mot||'').trim())return say('Indique el motivo del cambio');
+    var vals={};scal(r).forEach(function(k){vals[k]=d['f_'+k]});
+    var ap=null;if(col==='gastos'&&(d.ap_d||d.ap_h)){ap={d:d.ap_d||'',h:d.ap_h||'',a:d.ap_a}}
+    if(ap&&r.ap&&JSON.stringify(r.ap)===JSON.stringify(ap))ap=null;
+    propose(col,key,vals,d.mot,ap)})}
+function revertir(vid){
+  if(!chk('edit'))return;
+  var v=arr(S.versiones).filter(function(x){return x.id===vid})[0];if(!v)return;
+  var vals={};Object.keys(v.datos||{}).forEach(function(k){if(k!=='ap')vals[k]=v.datos[k]});
+  propose(v.col,v.key,vals,'Reversión a la versión '+v.ver,v.datos&&v.datos.ap?v.datos.ap:null)}
+function vEdi(){
+  var col=GG.ec||'gastos',q=(GG.eq||'').toLowerCase(),L=colGet(col).filter(function(x){return (!perRange()||inPer(recDate(col,x)))&&(!q||JSON.stringify(x).toLowerCase().indexOf(q)>-1)}).slice(0,40);
+  var sel='<select style="width:auto" onchange="GG_.hset(\'ec\',this.value)">'+Object.keys(EDC).map(function(c){return '<option value="'+c+'" '+(c===col?'selected':'')+'>'+E(EDC[c])+'</option>'}).join('')+'</select><input placeholder="Buscar…" value="'+E(GG.eq||'')+'" style="max-width:220px" onchange="GG_.hset(\'eq\',this.value)">';
+  var V0=arr(S.versiones).filter(function(v){return v.col===col&&inPer(v.ts)}).slice(0,60);
+  return '<div class="cd"><h3 style="margin-top:0">Edición controlada con versiones</h3><p style="color:var(--mu)">Cada modificación muestra un semáforo (rojo: periodo cerrado o antiguo, con contraseña; amarillo: afecta información relacionada; verde: seguro), la previsualización Antes, Después e Impacto, y conserva todas las versiones. En gastos puede indicar desde qué fecha se aplica.</p><div class="rw" style="gap:8px;margin-bottom:8px">'+sel+'</div>'+
+   tbl(['Registro','Fecha del dato','Última modificación','Estado','Acciones'],L.map(function(x){var k=keyOf(x),d=recDate(col,x);return ['<b>'+E(nameOf(col,x))+'</b>',d?dEs(d):'—',x.mod?fdt(x.mod)+' · '+E(x.modBy||''):'—',E(estadoDe(x)),btn('Editar…',"GG_.edit('"+col+"','"+E(String(k).replace(/'/g,"\\'"))+"')",'')]}))+'</div>'+
+   '<div class="cd" style="margin-top:12px"><h3 style="margin-top:0">Historial de versiones · '+E(EDC[col])+'</h3>'+tbl(['Fecha','Registro','Versión','Tipo','Usuario','Motivo','Campos',''],V0.map(function(v){return [fdt(v.ts),'<b>'+E(v.nom)+'</b>','v'+v.ver,E(v.tipo),E(v.by||''),'<small>'+E(v.mot||'')+'</small>','<small>'+E(arr(v.campos).join(', '))+'</small>',v.tipo==='original'||v.tipo!=='original'?btn('Revertir a esta',"GG_.rev('"+v.id+"')",''):'']}))+'</div>'}
+function estadoDe(x){return x.arch?'Archivado':x.susp?'Suspendido':(x.on===0||x.on===false)?'Inactivo':'Activo'}
+function setEstado(col,key,est){
+  if(!chk('elim'))return;
+  var r=colGet(col).filter(function(x){return keyOf(x)===String(key)})[0];if(!r)return;
+  modal('Confirmación · '+est+' '+(PCOLS[col]||col),[{k:'mot',l:'Motivo (obligatorio)',v:''}],function(d){
+    if(!String(d.mot||'').trim())return say('Indique el motivo');
+    r=colGet(col).filter(function(x){return keyOf(x)===String(key)})[0]||r;
+    var ant=estadoDe(r);r.arch=est==='Archivado'?1:0;r.susp=est==='Suspendido'?1:0;if(est==='Activo'){delete r.arch;delete r.susp;r.on=1}else{r.on=0}
+    r.mod=now();r.modBy=U.u;
+    S.hist=arr(S.hist);S.hist.unshift({id:'H'+uid(),pid:null,col:col,key:String(key),nom:nameOf(col,r),ts:now(),by:U.u,dev:(typeof DEV==='function'?DEV():''),estado:est,snap:null,deps:0,mot:d.mot});
+    AUD('Cambio de estado: '+ant+' → '+est,(PCOLS[col]||col)+': '+nameOf(col,r),'Motivo: '+d.mot);
+    try{SH=snap()}catch(e){}save();say(est+': '+nameOf(col,r));try{refresh()}catch(e){}V.gestion()})}
+function vSeg(){
+  var g=(S.cfg&&S.cfg.gg)||{},roles=Object.keys(ROLES).filter(function(r){return r!=='Administrador'});
+  return '<div class="cd"><h3 style="margin-top:0">Permisos de las herramientas administrativas</h3><p style="color:var(--mu)">El Administrador siempre tiene todos los permisos. Marque qué otros perfiles pueden ejecutar cada acción. La eliminación definitiva, la liquidación y el vaciado de la papelera quedan siempre solo para el Administrador.</p>'+
+   tbl(['Acción'].concat(roles),ACC.map(function(a){return [E(a[1])].concat(roles.map(function(r){return '<input type="checkbox" '+(arr(g[a[0]]).indexOf(r)>-1?'checked ':'')+(adm()?'':'disabled ')+'onchange="GG_.perm(\''+a[0]+'\',\''+E(r)+'\',this.checked)">'}))}))+'</div>'}
+function setPerm(a,r,on){
+  if(!adm())return say('Solo el Administrador');
+  S.cfg=S.cfg||{};S.cfg.gg=S.cfg.gg||{};var l=arr(S.cfg.gg[a]).slice();var i=l.indexOf(r);if(on&&i<0)l.push(r);if(!on&&i>-1)l.splice(i,1);S.cfg.gg[a]=l;
+  AUD('Permiso de gestión',a+' · '+r+' · '+(on?'concedido':'retirado'),'');try{applyRoles()}catch(e){}save()}
+
+/* ---------- filtro global por periodo ---------- */
+function perRange(){
+  var t=GG.pt||'todo';if(t==='todo')return null;
+  var ref=GG.pd?new Date(GG.pd+'T12:00:00'):new Date(),y=ref.getFullYear(),m=ref.getMonth(),d=ref.getDate(),a,b;
+  if(t==='dia'){a=new Date(y,m,d);b=new Date(y,m,d+1)}
+  else if(t==='semana'){var wd=(ref.getDay()+6)%7;a=new Date(y,m,d-wd);b=new Date(y,m,d-wd+7)}
+  else if(t==='mes'){a=new Date(y,m,1);b=new Date(y,m+1,1)}
+  else if(t==='trim'){var q=Math.floor(m/3)*3;a=new Date(y,q,1);b=new Date(y,q+3,1)}
+  else if(t==='sem'){var s=m<6?0:6;a=new Date(y,s,1);b=new Date(y,s+6,1)}
+  else if(t==='anio'){a=new Date(y,0,1);b=new Date(y+1,0,1)}
+  else{a=GG.pd?new Date(GG.pd+'T00:00:00'):new Date(0);b=GG.ph?new Date(new Date(GG.ph+'T00:00:00').getTime()+864e5):new Date(9e12)}
+  return [a.getTime(),b.getTime()]}
+function inPer(ts){var r=perRange();if(!r)return true;return typeof ts==='number'&&ts>=r[0]&&ts<r[1]}
+function perBar(){
+  var T=[['todo','Todo el tiempo'],['dia','Día'],['semana','Semana'],['mes','Mes'],['trim','Trimestre'],['sem','Semestre'],['anio','Año'],['rango','Rango personalizado']],t=GG.pt||'todo',r=perRange();
+  return '<div class="rw" style="gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center"><b>Periodo</b><select style="width:auto" onchange="GG_.hset(\'pt\',this.value)">'+T.map(function(x){return '<option value="'+x[0]+'" '+(x[0]===t?'selected':'')+'>'+x[1]+'</option>'}).join('')+'</select>'+(t!=='todo'?'<input type="date" style="width:auto" value="'+E(GG.pd||'')+'" onchange="GG_.hset(\'pd\',this.value)">':'')+(t==='rango'?'<input type="date" style="width:auto" value="'+E(GG.ph||'')+'" onchange="GG_.hset(\'ph\',this.value)">':'')+'<small style="color:var(--mu)">'+(r?dEs(r[0])+' al '+dEs(r[1]-1):'Sin filtro de fecha')+'</small></div>'}
+/* ---------- edición hecha en otros módulos: semáforo, versiones y deshacer ---------- */
+var TRK=['gastos','productos','insumos','clientes','provs','fondos','promos','trab','compras','ventas','bancos'];
+function trkSnap(){var o={};TRK.forEach(function(c){var m={};colGet(c).forEach(function(x){var k=keyOf(x);if(k!=null){try{m[k]=JSON.stringify(x)}catch(e){}}});o[c]=m});return o}
+function scalDiff(a,b){var ks={},ch=[];Object.keys(a).concat(Object.keys(b)).forEach(function(k){ks[k]=1});Object.keys(ks).forEach(function(k){if(SKIP.test(k))return;var x=a[k],y=b[k],ok=function(v){return v==null||typeof v==='string'||typeof v==='number'};if(ok(x)&&ok(y)&&String(x==null?'':x)!==String(y==null?'':y))ch.push({k:k,a:x,b:y})});return ch}
+function rollbackItems(items){
+  items.forEach(function(it){var ref=colRef(it.col),i=-1;ref.forEach(function(x,n){if(i<0&&keyOf(x)===it.key)i=n});if(i<0)return;var obj=ref[i],o=JSON.parse(it.old);Object.keys(obj).forEach(function(k){if(!(k in o))delete obj[k]});Object.keys(o).forEach(function(k){obj[k]=o[k]})});
+  try{autoLink()}catch(e){}try{SH=snap()}catch(e){}save();try{refresh()}catch(e){}}
+function verPush(col,r,ch,tipo,mot,antes){
+  S.versiones=arr(S.versiones);var key=keyOf(r),prev=vrs(col,key);
+  if(!prev.length){var orig={};scal(r).forEach(function(k){orig[k]=r[k]});ch.forEach(function(c){orig[c.k]=c.a});S.versiones.unshift({id:'V'+uid(),col:col,key:String(key),nom:nameOf(col,r),ver:1,tipo:'original',ts:r.mod||r.ts||now(),by:r.modBy||r.by||'',mot:'Estado inicial',datos:orig,campos:[]})}
+  var d={};scal(r).forEach(function(k){d[k]=r[k]});
+  S.versiones.unshift({id:'V'+uid(),col:col,key:String(key),nom:nameOf(col,r),ver:prev.length+(prev.length?1:2),tipo:tipo,ts:now(),by:U.u,dev:(typeof DEV==='function'?DEV():''),mot:mot||'',datos:d,campos:ch.map(function(c){return c.k}),antes:antes});
+  if(S.versiones.length>1500)S.versiones.length=1500}
+function postEdit(s0,d,title){
+  try{
+    var s1=trkSnap(),items=[],mot=String(d&&(d.mo||d.motivo||d.mot||d.m)||'');
+    TRK.forEach(function(c){Object.keys(s1[c]).forEach(function(k){var a=s0[c][k],b=s1[c][k];if(a==null||a===b)return;var o=JSON.parse(a),n=JSON.parse(b),ch=scalDiff(o,n);if(!ch.length)ch=[{k:'(detalle)',a:'',b:'modificado'}];items.push({col:c,key:k,old:a,rec:n,ch:ch})})});
+    if(!items.length||items.length>40)return;
+    var worst={n:'verde',c:'#16a34a',t:''},rank={verde:0,amarillo:1,rojo:2};
+    items.forEach(function(it){it.lv=nivel(it.col,it.rec,it.ch);if(rank[it.lv.n]>=rank[worst.n])worst=it.lv});
+    var fin=function(){
+      items.forEach(function(it){var r=colGet(it.col).filter(function(x){return keyOf(x)===it.key})[0];if(!r)return;var antes={};it.ch.forEach(function(c){antes[c.k]=c.a});verPush(it.col,r,it.ch,'modificación externa',mot||title,antes);r.mod=now();r.modBy=U.u});
+      AUD('Control de cambios · '+title,items.map(function(it){return (EDC[it.col]||it.col)+': '+nameOf(it.col,it.rec)+' ('+it.ch.map(function(c){return c.k+': '+c.a+' → '+c.b}).join('; ')+')'}).join(' | ').slice(0,600),'Nivel '+worst.n+(mot?' · '+mot:''));
+      try{SH=snap()}catch(e){}save();say('Cambio registrado · nivel '+worst.n+' · versión guardada')};
+    if(worst.n!=='rojo')return fin();
+    var rows=items.map(function(it){return '<tr><td><b>'+E(nameOf(it.col,it.rec))+'</b> ('+E(EDC[it.col]||it.col)+')</td><td>'+it.ch.map(function(c){return E(c.k)+': '+E(c.a)+' → <b>'+E(c.b)+'</b>'}).join('<br>')+'</td></tr>'}).join('');
+    var h='<div style="border-left:6px solid #dc2626;padding:6px 10px;margin-bottom:8px"><b style="color:#dc2626">Nivel ROJO</b><br>'+E(worst.t)+'</div><table style="width:100%"><tr><th align="left">Registro</th><th align="left">Antes → Después</th></tr>'+rows+'</table><p><b>Impacto:</b> '+items.map(function(it){return (EDIMP[it.col]||[]).join(', ')}).filter(function(v,i,a){return a.indexOf(v)===i}).map(E).join(' · ')+'</p><p><b>Responsable:</b> '+E(U.u)+' · <b>Fecha:</b> '+fdt(now())+'</p><p>El cambio ya se aplicó. Para mantenerlo escriba su contraseña; si elige Deshacer, vuelve al valor anterior.</p>';
+    modal('Confirmación · Cambio en información histórica',[{k:'x',l:h,o:['Mantener el cambio','Deshacer el cambio'],v:'Deshacer el cambio'},{k:'pw',l:'Contraseña del administrador',t:'password'}],function(d2){
+      (async function(){var okp=d2.x==='Mantener el cambio'&&await pwOk(d2.pw);
+        if(!okp){rollbackItems(items);AUD('Control de cambios · cambio deshecho',title,'Nivel rojo no confirmado');say(d2.x==='Mantener el cambio'?'Contraseña incorrecta: el cambio se deshizo':'Cambio deshecho');return}
+        fin()})()})
+  }catch(e){}}
+/* ---------- ventas de prueba ---------- */
+function anularVenta(v,mo){
+  (v.cons||[]).forEach(function(c){var it=S[c.k]&&S[c.k][c.i];if(it){it.sx[c.b||'S01']=+((it.sx[c.b||'S01']||0)-c.d).toFixed(4);inc(c.k,c.i,-c.d,c.b||'S01')}});
+  (v.cons||[]).forEach(function(c){var it=c.k==='insumos'&&S.insumos[c.i];if(it)S.kardex.push({s:c.b||'S01',ts:Date.now(),code:it.code,name:it.name,tipo:'Anulación de venta',qty:-c.d,doc:'Anul. T-'+String(v.n||0).padStart(6,'0'),u:U.u})});
+  S.anuladas.push(Object.assign({},v,{anulado:Date.now(),por:U.u,motivo:mo}));S.ventas=S.ventas.filter(function(x){return x!==v});try{delete FB.sent[v.id]}catch(e){}try{fbReq('DELETE','/ventas/'+v.id)}catch(e){}}
+function ventasPrueba(){
+  if(!chk('limp'))return;
+  modal('Confirmación · Ventas de prueba',[{k:'u',l:'Usuario que registró las ventas de prueba',o:['(cualquiera)'].concat(arr(S.users).map(function(u){return u.u})),v:'(cualquiera)'},{k:'tx',l:'Texto en la observación o en el nombre del cliente (por ejemplo: prueba)',v:'prueba'},{k:'d',l:'Desde (opcional)',t:'date',v:''},{k:'h',l:'Hasta (opcional)',t:'date',v:''}],function(c){
+    var tx=String(c.tx||'').trim().toLowerCase();
+    if(c.u==='(cualquiera)'&&!tx)return say('Indique un usuario o un texto para identificar las ventas de prueba');
+    var a=c.d?new Date(c.d+'T00:00:00').getTime():0,b=c.h?new Date(c.h+'T23:59:59').getTime():9e15;
+    var L=arr(S.ventas).filter(function(v){if(c.u!=='(cualquiera)'&&v.user!==c.u)return false;if(v.ts<a||v.ts>b)return false;if(tx){var cl=arr(S.clientes).filter(function(z){return String(z.id)===String(v.cli)})[0];var s=(String(v.obs||'')+' '+(cl?cl.name:'')+' '+String(v.cli||'')).toLowerCase();if(s.indexOf(tx)<0)return false}return true});
+    if(!L.length)return say('No se encontraron ventas con esos criterios');
+    var tot=L.reduce(function(s,v){return s+(+v.total||0)},0);
+    wizard({t:'Limpieza de ventas de prueba',pre:'<p><b>'+plural(L.length,'venta','ventas')+'</b> por S/ '+tot.toFixed(2)+' ('+dEs(L[0].ts)+' al '+dEs(L[L.length-1].ts)+')</p><p>Módulos afectados: Caja, Tesorería, Finanzas, Dashboard CEO, Inventario, Reportes.</p><p>Cada venta se <b>anula</b> con su procedimiento normal: se devuelve el stock al inventario, se registra el movimiento en el Kardex y queda en el registro de ventas anuladas y en la auditoría.</p>',ver:true,backup:{ventas:L},bname:'ventas_de_prueba',
+      run:async function(){var ids=L.map(function(v){return v.id});L.forEach(function(v){anularVenta(v,'Venta de prueba (limpieza administrativa)')});AUD('Limpieza de ventas de prueba',L.length+' venta(s) por S/ '+tot.toFixed(2),'Stock devuelto · ids: '+ids.slice(0,20).join(','));save();say(L.length+' venta(s) de prueba anuladas y stock devuelto');try{refresh()}catch(e){}V.gestion()}})})}
+/* ---------- restablecer usuarios (siempre conserva a los administradores) ---------- */
+function rstUsers(){
+  if(!chk('rstm'))return;
+  var keep=arr(S.users).filter(function(u){return u.r==='Administrador'||u.u===U.u}),drop=arr(S.users).filter(function(u){return keep.indexOf(u)<0});
+  if(!drop.length)return say('No hay usuarios no administradores que restablecer');
+  wizard({t:'Restablecer usuarios',pre:'<p>Se conservarán <b>'+keep.length+'</b> usuario(s) administrador(es) ('+keep.map(function(u){return E(u.u)}).join(', ')+').</p><p>Se retirarán <b>'+drop.length+'</b> usuario(s): '+drop.map(function(u){return E(u.u)+' ('+E(u.r)+')'}).join(', ')+'. Pasan a la papelera y se pueden restaurar. Sus ventas y su historial no se modifican.</p>',ver:true,backup:{users:S.users},bname:'usuarios',
+    run:async function(){GG.nextMot='Restablecimiento de usuarios';var n=0;drop.forEach(function(u){if(removeRec('users',keyOf(u)))n++});AUD('Restablecimiento de usuarios',n+' usuario(s) retirados',keep.length+' administrador(es) conservados');save();say('Usuarios restablecidos: '+n+' retirados');V.gestion()}})}
+/* ---------- archivo histórico de periodos cerrados ---------- */
+var ARCK=['ventas','gastos','compras','kardex'];
+function arcRange(){var d=GG.ad?new Date(GG.ad+'T00:00:00').getTime():null,h=GG.ah?new Date(GG.ah+'T23:59:59').getTime():null;return d!=null&&h!=null&&h>=d?[d,h]:null}
+function arcItems(r){var o={};ARCK.forEach(function(k){o[k]=arr(S[k]).filter(function(x){return x&&!x.arch&&typeof x.ts==='number'&&x.ts>=r[0]&&x.ts<=r[1]})});return o}
+function cubierto(r){
+  var iv=arr(S.cierres).filter(function(c){return c&&c.desde&&c.hasta}).map(function(c){return [c.desde,c.hasta]}).sort(function(a,b){return a[0]-b[0]}),cur=r[0],tol=2000;
+  for(var i=0;i<iv.length&&cur<=r[1];i++){if(iv[i][0]<=cur+tol&&iv[i][1]>=cur)cur=iv[i][1]+1}
+  return cur>r[1]-tol}
+function arcRun(){
+  if(!chk('limp'))return;
+  var r=arcRange();if(!r)return say('Indique las fechas desde y hasta');
+  if(!cubierto(r))return say('El rango no está cubierto por periodos cerrados. Cierre primero el periodo desde Finanzas (Cierre operativo)');
+  var it=arcItems(r),tot=0;ARCK.forEach(function(k){tot+=it[k].length});if(!tot)return say('No hay registros para archivar en ese rango');
+  wizard({t:'Archivado de periodo cerrado',pre:'<p>Periodo: <b>'+dEs(r[0])+' al '+dEs(r[1])+'</b> (cubierto por cierres)</p><ul style="margin:6px 0 0 18px">'+ARCK.map(function(k){return '<li>'+E(k)+': <b>'+it[k].length+'</b></li>'}).join('')+'</ul><p>Los registros se descargan en un archivo y se marcan como archivados: salen de los listados operativos, pero <b>siguen contando en reportes, finanzas y cierres</b>. Se pueden desarchivar cuando quiera.</p>',ver:false,backup:it,bname:'archivo',
+    run:async function(){var bid='AR'+uid();ARCK.forEach(function(k){it[k].forEach(function(x){x.arch=bid})});S.arch=arr(S.arch);S.arch.unshift({id:bid,desde:r[0],hasta:r[1],by:U.u,ts:now(),cnt:ARCK.map(function(k){return it[k].length}),estado:'Archivado'});AUD('Archivado de periodo cerrado',dEs(r[0])+' al '+dEs(r[1])+' · '+tot+' registro(s)','Respaldo descargado');save();say(tot+' registro(s) archivados');try{refresh()}catch(e){}V.gestion()}})}
+function arcUndo(id){
+  if(!chk('limp'))return;var b=arr(S.arch).filter(function(x){return x.id===id})[0];if(!b)return;
+  var n=0;ARCK.forEach(function(k){arr(S[k]).forEach(function(x){if(x&&x.arch===id){delete x.arch;n++}})});b.estado='Desarchivado';b.ts2=now();AUD('Desarchivado de periodo',dEs(b.desde)+' al '+dEs(b.hasta)+' · '+n+' registro(s)','');save();say(n+' registro(s) desarchivados');try{refresh()}catch(e){}V.gestion()}
+function vArc(){
+  var r=arcRange(),it=r?arcItems(r):null,cov=r?cubierto(r):false,B=arr(S.arch).filter(function(b){return inPer(b.ts)});
+  var cs=arr(S.cierres).filter(function(c){return c&&c.desde&&c.hasta}).slice(-12).reverse();
+  return '<div class="cd"><h3 style="margin-top:0">Archivo histórico de periodos cerrados</h3><p style="color:var(--mu)">Archiva ventas, gastos, compras y movimientos de inventario de periodos ya cerrados. Quedan fuera de los listados diarios (ventas archivadas ocultas en Registro de ventas) pero siguen sumando en reportes y cierres. Antes de archivar se descarga un respaldo del periodo.</p>'+
+   '<div class="rw" style="gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">Desde <input type="date" style="width:auto" value="'+E(GG.ad||'')+'" onchange="GG_.hset(\'ad\',this.value)"> Hasta <input type="date" style="width:auto" value="'+E(GG.ah||'')+'" onchange="GG_.hset(\'ah\',this.value)"><select style="width:auto" onchange="GG_.arcPick(this.value)"><option value="">Usar un cierre existente…</option>'+cs.map(function(c,i){return '<option value="'+i+'">'+E(c.tipo||'Cierre')+': '+dEs(c.desde)+' al '+dEs(c.hasta)+'</option>'}).join('')+'</select></div>'+
+   (r?'<p>Periodo cerrado: <b style="color:'+(cov?'var(--ok,#16a34a)':'var(--er)')+'">'+(cov?'Sí, cubierto por cierres':'No cubierto por cierres')+'</b> · '+ARCK.map(function(k){return E(k)+': <b>'+it[k].length+'</b>'}).join(' · ')+'</p>':'<p style="color:var(--mu)">Elija un rango.</p>')+
+   '<div class="rw" style="gap:8px">'+btn('Exportar y archivar…',"GG_.arcRun()",'r')+btn(GG.showArch?'Ocultar archivadas en Ventas':'Mostrar archivadas en Ventas',"GG_.arcShow()",'g')+'</div></div>'+
+   '<div class="cd" style="margin-top:12px"><h3 style="margin-top:0">Lotes archivados</h3>'+tbl(['Fecha','Periodo','Usuario','Ventas','Gastos','Compras','Kardex','Estado',''],B.map(function(b){return [fdt(b.ts),dEs(b.desde)+' al '+dEs(b.hasta),E(b.by),b.cnt[0],b.cnt[1],b.cnt[2],b.cnt[3],E(b.estado),b.estado==='Archivado'?btn('Desarchivar',"GG_.arcUndo('"+b.id+"')",''):'']}))+'</div>'}
+
+/* ---------- registro del módulo y vistas ---------- */
+function btn(l,f,c){return '<button class="btn '+(c||'g')+' s" onclick="'+f+'">'+l+'</button>'}
+function tabs(){var T=[['pap','Papelera'],['his','Historial permanente'],['per','Personal y liquidación'],['dep','Dependencias y eliminación'],['edi','Edición controlada'],['arc','Archivo histórico'],['con','Consistencia'],['lim','Limpieza guiada'],['vac','Limpieza por áreas'],['rst','Restablecimiento'],['srv','Respaldos de la nube'],['seg','Permisos']];
+  return '<div class="rw" style="margin-bottom:10px;gap:6px;flex-wrap:wrap">'+T.map(function(t){return '<button class="btn '+(GG.tab===t[0]?'':'g')+' s" onclick="GG_.tab(\''+t[0]+'\')">'+t[1]+'</button>'}).join('')+'</div>'}
+function vPap(){var L=arr(S.papelera).filter(function(e){return inPer(e.ts)});
+  return '<div class="cd"><h3 style="margin-top:0">Papelera empresarial</h3><p style="color:var(--mu)">Todo registro eliminado de Clientes, Proveedores, Usuarios, Personal, Fondos, Promociones, Activos, Insumos, Productos, Recetas y Turnos queda aquí. Al restaurar se reconstruyen sus vínculos. Las ventas y compras no se eliminan: se anulan y conservan su historial.</p>'+
+   (L.length?btn('Vaciar papelera',"GG_.vaciarPap()",'r'):'')+
+   tbl(['Fecha','En papelera','Módulo','Registro','Motivo','Eliminado por','Equipo','Referencias','Acciones'],L.map(function(e){return [fdt(e.ts),daysIn(e.ts),E(PCOLS[e.col]||e.col),'<b>'+E(e.nom)+'</b>','<small>'+E(e.mot||'—')+'</small> '+btn('Motivo',"GG_.motivo('"+e.id+"')",'g'),E(e.by||''),'<small>'+E(e.dev||'')+'</small>',(e.deps&&e.deps.length)?'<small>'+e.deps.map(function(d){return E(d.m)+' '+d.n}).join(' · ')+'</small>':'<small style="color:var(--mu)">ninguna</small>',btn('Restaurar',"GG_.rest('"+e.id+"')",'')+' '+btn('Eliminar definitivamente',"GG_.purge('"+e.id+"')",'r')]}))+'</div>'}
+function vDep(){
+  var col=GG.col,q=(GG.q||'').toLowerCase(),L=colGet(col).filter(function(x){return !q||JSON.stringify(x).toLowerCase().indexOf(q)>-1}).slice(0,40);
+  var sel='<select style="width:auto" onchange="GG_.setCol(this.value)">'+Object.keys(PCOLS).map(function(c){return '<option value="'+c+'" '+(c===col?'selected':'')+'>'+E(PCOLS[c])+'</option>'}).join('')+'</select><input placeholder="Buscar…" value="'+E(GG.q)+'" style="max-width:220px" onchange="GG_.setQ(this.value)">';
+  return '<div class="cd"><h3 style="margin-top:0">Motor de dependencias</h3><p style="color:var(--mu)">Antes de modificar o eliminar un registro, consulte qué módulos dependen de él.</p><div class="rw" style="gap:8px;margin-bottom:8px">'+sel+'</div>'+
+   tbl(['Registro','Clave','Estado','Acciones'],L.map(function(x){var k=keyOf(x),ks=E(String(k).replace(/'/g,"\\'")),es=estadoDe(x);return ['<b>'+E(nameOf(col,x))+'</b>','<small>'+E(k)+'</small>',E(es),(es==='Activo'?btn('Archivar',"GG_.estado('"+col+"','"+ks+"','Archivado')",'g')+' '+btn('Suspender',"GG_.estado('"+col+"','"+ks+"','Suspendido')",'g'):btn('Reactivar',"GG_.estado('"+col+"','"+ks+"','Activo')",''))+' '+btn('Ver impacto',"GG_.impact('"+col+"','"+E(String(k).replace(/'/g,"\\'"))+"')",'')+' '+btn('Eliminar…',"GG_.elim('"+col+"','"+E(String(k).replace(/'/g,"\\'"))+"')",'r')]}))+'</div>'}
+function vCon(){
+  var r=GG.chk||runChecks();GG.chk=r;GG.chkT=GG.chkT||now();
+  var bad=r.filter(function(x){return x.s!=='OK'}).length;
+  var srv=GG.srv?'<div class="cd"><h3 style="margin-top:0">Verificación en la nube</h3>'+tbl(['Chequeo','Estado','Cantidad','Detalle','Corregido'],GG.srv.map(function(x){return [E(x.chequeo),'<b style="color:'+(x.severidad==='OK'?'var(--ok,#16a34a)':x.severidad==='ALERTA'?'var(--er)':'#b8892b')+'">'+E(x.severidad)+'</b>',x.cantidad,'<small>'+E(x.detalle)+'</small>',x.corregido?'Sí':'—']}))+'</div>':'';
+  return '<div class="cd"><h3 style="margin-top:0">Motor de consistencia</h3><p style="color:var(--mu)">Valida referencias, duplicados y sincronización. Corrige automáticamente lo seguro; el resto se informa. Última revisión: '+fdt(GG.chkT)+'.</p><div class="rw" style="gap:8px;margin-bottom:8px">'+btn('Revisar ahora',"GG_.check()",'')+btn('Corregir automáticamente',"GG_.fix()",'')+btn('Verificar en la nube',"GG_.checkSrv(false)",'g')+btn('Verificar y corregir en la nube',"GG_.checkSrv(true)",'g')+'</div>'+
+   '<p>'+(bad?'<b style="color:var(--er)">'+plural(bad,'chequeo con hallazgos','chequeos con hallazgos')+'</b>':'<b style="color:var(--ok,#16a34a)">Sin hallazgos</b>')+'</p>'+
+   tbl(['Chequeo','Estado','Cantidad','Detalle'],r.filter(function(x){return x.c!=='Papelera con registros'}).map(function(x){return [E(x.c),'<b style="color:'+(x.s==='OK'?'var(--ok,#16a34a)':x.s==='ALERTA'?'var(--er)':'#b8892b')+'">'+x.s+'</b>',x.n,'<small>'+E(x.d)+'</small>']}))+'</div>'+srv}
+function vLim(){
+  return '<div class="cd"><h3 style="margin-top:0">Limpieza inteligente</h3><p style="color:var(--mu)">Asistentes guiados: muestran la cantidad de registros y los módulos afectados, descargan un respaldo, piden contraseña y confirmación escrita, y quedan en auditoría.</p>'+
+   '<div class="g2">'+LIMP.map(function(l){var n=l.area?areaCount(areaBy(l.area)):(l.loc?l.loc():'—');return '<div class="cd"><h4 style="margin-top:0">'+E(l.n)+'</h4><p style="color:var(--mu)">'+E(l.d)+'</p><p><small>Registros locales: <b>'+n+'</b> · Módulos: '+l.m.map(E).join(', ')+'</small></p>'+btn('Ejecutar…',"GG_.limp('"+l.a+"')",'r')+'</div>'}).join('')+'</div></div>'}
+function vVac(){
+  return '<div class="cd"><h3 style="margin-top:0">Centro de limpieza administrativa</h3><p style="color:var(--mu)">Marque una o varias áreas y limpie solo lo elegido. Se muestra el total de registros y los módulos afectados, se descarga un respaldo, se pide contraseña y confirmación escrita, y el cambio llega a todos los dispositivos. La configuración vigente, los catálogos de productos e insumos y los usuarios no se vacían desde aquí.</p><div class="rw" style="gap:8px;margin-bottom:8px">'+btn('Limpiar áreas seleccionadas…',"GG_.vaciarSel()",'r')+btn('Quitar selección',"GG_.selNone()",'g')+'</div>'+
+   tbl(['','Área','Registros','Módulos relacionados','Riesgo',''],AREAS.map(function(A){return ['<input type="checkbox" '+(GG.sel&&GG.sel[A.a]?'checked ':'')+'onchange="GG_.tog(\''+A.a+'\',this.checked)">','<b>'+E(A.n)+'</b>',areaCount(A),'<small>'+A.m.map(E).join(', ')+'</small>','<b style="color:'+(A.r==='alto'?'var(--er)':A.r==='medio'?'#b8892b':'var(--mu)')+'">'+A.r+'</b>',btn('Vaciar…',"GG_.vaciar('"+A.a+"')",'r')]}))+'</div>'}
+function vSrv(){
+  var d=GG.srvList;
+  var h='<div class="cd"><h3 style="margin-top:0">Respaldos y papelera de la nube</h3><p style="color:var(--mu)">Cada vaciado en la nube crea un respaldo restaurable. También se listan los registros eliminados directamente en la base.</p><div class="rw" style="gap:8px;margin-bottom:8px">'+btn('Actualizar',"GG_.loadSrv()",'')+'</div>';
+  if(!d)return h+'<p style="color:var(--mu)">Pulse Actualizar para consultar la nube.</p></div>';
+  if(d.err)return h+'<p style="color:var(--er)">'+E(d.err)+'</p></div>';
+  return h+'<h4>Respaldos</h4>'+tbl(['Fecha','Origen','Área','Filas','Creado por','Estado',''],arr(d.resp).map(function(r){return [fdt(r.creado_en),E(r.origen),E(r.area||''),r.filas,E(r.creado_por||''),r.restaurado_en?'Restaurado '+fdt(r.restaurado_en):'Disponible',btn('Restaurar',"GG_.restResp("+r.id+")",'')]}))+
+   '<h4>Eliminados en la base</h4>'+tbl(['Fecha','Ruta','Resumen','Eliminado por','Estado',''],arr(d.pap).map(function(p){return [fdt(p.eliminado_en),E(p.nodo),'<small>'+E(p.resumen||'')+'</small>',E(p.eliminado_por||''),p.restaurado_en?'Restaurado':'En papelera',p.restaurado_en?'':btn('Restaurar',"GG_.restPapSrv("+p.id+")",'')]}))+'</div>'}
+function view(){
+  if(!anyGG())return main(tb('Gestión global')+'<div class="cd"><p>Su perfil no tiene permisos en este módulo.</p></div>');
+  var body=GG.tab==='pap'?vPap():GG.tab==='his'?vHis():GG.tab==='per'?vPer():GG.tab==='dep'?vDep():GG.tab==='edi'?vEdi():GG.tab==='arc'?vArc():GG.tab==='seg'?vSeg():GG.tab==='con'?vCon():GG.tab==='lim'?vLim():GG.tab==='vac'?vVac():GG.tab==='rst'?vRst():vSrv();
+  main(tb('Gestión global · integridad y administración de datos','')+'<p style="color:var(--mu)">Papelera, dependencias, consistencia, limpieza y vaciado por área. Los cambios se propagan a todos los dispositivos.</p>'+perBar()+tabs()+body)}
+
+var API={
+ arcRun:function(){arcRun()},arcUndo:function(i){arcUndo(i)},arcShow:function(){GG.showArch=!GG.showArch;view()},arcPick:function(i){var cs=arr(S.cierres).filter(function(c){return c&&c.desde&&c.hasta}).slice(-12).reverse(),c=cs[+i];if(!c)return;GG.ad=new Date(c.desde).toISOString().slice(0,10);GG.ah=new Date(c.hasta-1).toISOString().slice(0,10);view()},rstu:function(){rstUsers()},
+ can:function(a){return can(a)},any:function(){return anyGG()},
+ edit:function(c,k){editStart(c,k)},rev:function(i){revertir(i)},perm:function(a,r,o){setPerm(a,r,o)},estado:function(c,k,e){setEstado(c,k,e)},motivo:function(id){setMot(id)},
+ hset:function(k,v){GG[k]=v;view()},hrest:function(id){histRestore(id)},elim:function(c,k){elim(c,k)},liq:function(k){liquidar(k)},liqv:function(i){liqVer(i)},reinc:function(i){reincorporar(i)},punto:function(){puntoCrear()},restf:function(){restFile()},
+ rstGen:function(){puntoCrear('Antes de restablecimiento general',function(){try{A.reset()}catch(e){say('Abra Administración y use Restablecer datos')}})},
+ tog:function(a,c){GG.sel=GG.sel||{};if(c)GG.sel[a]=1;else delete GG.sel[a]},selNone:function(){GG.sel={};view()},vaciarSel:function(){vaciarVarias(Object.keys(GG.sel||{}))},
+ dbg:function(){return JSON.stringify({err:GG.err,sh:!!SH,rem:REM,rst:window.__rst,ok:ok(),adm:adm(),u:!!U})},
+ tab:function(t){GG.tab=t;view()},
+ setCol:function(c){GG.col=c;view()},setQ:function(q){GG.q=q;view()},
+ rest:function(id){papRestore(id)},purge:function(id){papPurge(id)},vaciarPap:function(){papVaciar()},
+ impact:async function(col,key){
+   var x=colGet(col).filter(function(r){return keyOf(r)===String(key)})[0];if(!x)return;
+   var h='<b>'+E(nameOf(col,x))+'</b> ('+E(PCOLS[col])+')'+depsHtml(depsOf(col,String(key),x)),mp={clientes:'cliente',provs:'proveedor',insumos:'insumo',productos:'producto',users:'usuario',trab:'trabajador'};
+   if(mp[col]&&sbc()){var r=await rpc('erp_impacto',{p_tipo:mp[col],p_clave:col==='insumos'||col==='productos'?(x.code||x.name):col==='clientes'?String(x.id):col==='provs'?x.name:col==='users'?x.u:String(x.id)});
+     if(r.data){var d=r.data,ks=Object.keys(d).filter(function(k){return k!=='encontrado'&&k!=='modulos'&&typeof d[k]!=='object'});h+='<hr><b>En la nube</b><ul style="margin:6px 0 0 18px">'+ks.map(function(k){return '<li>'+E(k.replace(/_/g,' '))+': <b>'+E(d[k])+'</b></li>'}).join('')+'</ul><small>Módulos: '+arr(d.modulos).map(E).join(', ')+'</small>'}}
+   modal('Impacto de la operación',[{k:'x',l:h,o:['Cerrar'],v:'Cerrar'}],function(){})},
+ check:function(){GG.chk=runChecks();GG.chkT=now();view()},
+ fix:function(){var n=0;(GG.chk||runChecks()).forEach(function(x){if(x.fx&&x.n)n+=fixCheck(x.fx)});if(n){save();try{refresh()}catch(e){}}GG.chk=runChecks();GG.chkT=now();say(n?n+' corrección(es) aplicadas':'Nada que corregir automáticamente');view()},
+ checkSrv:async function(fx){var r=await rpc('erp_consistencia',{p_autofix:!!fx});if(r.error||r.noFn||r.noCloud)return say(r.noCloud?'Requiere conexión a la nube':'El motor de la nube no está instalado: ejecute el script SQL completo');GG.srv=arr(r.data);if(fx)AUD('Consistencia en la nube','Verificación con corrección automática','');view()},
+ limp:function(a){limpiar(a)},vaciar:function(a){vaciarArea(a)},
+ loadSrv:async function(){var a=await rpc('erp_respaldos_listar',{p_limite:50}),b=await rpc('erp_papelera_listar',{p_limite:100});
+   if(a.noCloud)GG.srvList={err:'Requiere conexión a la nube'};else if(a.noFn)GG.srvList={err:'El motor de la nube no está instalado: ejecute el script SQL completo (supabase_GIANCORP_COMPLETO.sql)'};else if(a.error)GG.srvList={err:a.error.message};else GG.srvList={resp:a.data,pap:b.data};view()},
+ restResp:function(id){wizard({t:'Restaurar respaldo #'+id,pre:'<p>Se restaurarán los datos del respaldo #'+id+' en la nube y en todos los dispositivos. Lo existente en esa área puede sobrescribirse.</p>',run:async function(){var x=await rpc('erp_restaurar_respaldo',{p_id:id,p_confirmar:'CONFIRMAR',p_usuario:U.u});if(x.error)throw new Error(x.error.message);AUD('Respaldo restaurado','#'+id,'');var it=await rpcLatest();if(it)vacApply(it)}})},
+ restPapSrv:function(id){wizard({t:'Restaurar registro de la base',pre:'<p>Se restaurará el registro eliminado directamente en la base y se reconstruirán sus relaciones.</p>',ver:false,run:async function(){var x=await rpc('erp_papelera_restaurar',{p_id:id,p_usuario:U.u});if(x.error)throw new Error(x.error.message);AUD('Papelera de la nube: restauración','#'+id,(x.data&&x.data.aviso)||'');say((x.data&&x.data.aviso)||'Restaurado');setTimeout(function(){location.reload()},900)}})}
+};
+window.GG_=API;
+
+function reg(){
+  if(typeof MODS!=='undefined'&&MODS.gestion)return;
+  MODS.gestion='Gestión global';
+  var h=HUBS.filter(function(x){return x.k==='h_cfg'})[0];if(h&&h.ch.indexOf('gestion')<0){var i=h.ch.indexOf('emerg');h.ch.splice(i>=0?i+1:h.ch.length,0,'gestion')}
+  try{P_OF.gestion='h_cfg';DESC.gestion='Papelera, dependencias, consistencia, limpieza y vaciado por área'}catch(e){}
+  try{IC.gestion=IC.cfg||IC.ops}catch(e){}
+  try{[ROLES,ROLES0].forEach(function(R){if(R&&R.Administrador&&R.Administrador.indexOf('gestion')<0)R.Administrador.push('gestion')})}catch(e){}
+  try{['papelera','hist','liq','histper','puntos','versiones','arch'].forEach(function(k){if(SYNC_KEYS.indexOf(k)<0)SYNC_KEYS.push(k)})}catch(e){}
+  V.gestion=view;
+  /* envolturas (funciones declaradas: se pueden reasignar) */
+  try{GG.dirty={};var _push=push;push=function(){try{papDetect()}catch(e){}try{if(FB.ready&&!window.__rst)SYNC_KEYS.forEach(function(k){if(typeof S[k]==='undefined')return;if(FB.last[k]!==JSON.stringify(S[k]))GG.dirty[k]=now()})}catch(e){}return _push.apply(this,arguments)}}catch(e){}
+  try{var _sk=setKey;setKey=function(k,dd){try{if(GG.dirty[k]&&now()-GG.dirty[k]<5000&&!window.__rst&&JSON.stringify(dd)!==JSON.stringify(S[k]))return}catch(e){}var r=_sk.apply(this,arguments);try{SH=snap()}catch(e){}return r}}catch(e){}
+  try{var _or=onRemote;onRemote=function(){REM=1;try{return _or.apply(this,arguments)}finally{try{SH=snap()}catch(e){}REM=0}}}catch(e){}
+  try{var _sb=sbEvt;sbEvt=function(path,data){var p=String(path||'').split('/');if(p[0]==='sys'&&p[1]==='vaciar'){if(data)vacHandle(data);return}return _sb.apply(this,arguments)}}catch(e){}
+  ['papelera','hist','liq','histper','puntos','versiones','arch'].forEach(function(k){S[k]=arr(S[k])});
+  var EDITR2=/^(Editar|Corregir|Anular|Restaurar|Revertir|Configurar|Asistencia ·|Vincular|Calendario operativo|Metas empresariales|Parámetros financieros|Personalización del diseño|Inventario físico|Fijar)/i;
+  try{var _mo=modal;modal=function(t,f,ok){if(!(U&&U.r==='Administrador'&&EDITR2.test(String(t))&&typeof ok==='function'))return _mo(t,f,ok);return _mo(t,f,function(d){var s0=trkSnap(),r=ok(d);Promise.resolve(r).then(function(){setTimeout(function(){postEdit(s0,d,String(t))},350)},function(){});return r})}}catch(e){}
+  try{var _vv=V.ventas;V.ventas=function(){if(GG.showArch)return _vv.apply(this,arguments);var all=S.ventas;S.ventas=all.filter(function(v){return !v.arch});try{return _vv.apply(this,arguments)}finally{S.ventas=all}}}catch(e){}
+  try{var _ar=applyRoles;applyRoles=function(){var r=_ar.apply(this,arguments);try{var g=(S.cfg&&S.cfg.gg)||{};Object.keys(ROLES).forEach(function(rl){if(rl!=='Administrador'&&ACC.some(function(a){return arr(g[a[0]]).indexOf(rl)>-1})&&ROLES[rl].indexOf('gestion')<0)ROLES[rl].push('gestion')})}catch(e){}return r}}catch(e){}
+}
+var tries=0,iv=setInterval(function(){tries++;try{if(ok()&&S){clearInterval(iv);reg();setTimeout(function(){try{SH=snap()}catch(e){}},1500)}}catch(e){}if(tries>120)clearInterval(iv)},250);
+/* arranque de la difusión y de la validación automática */
+var vt=0;setInterval(function(){try{if(!ok()||!U)return;vt++;if(vt%2===0||!GG.vp){vacPull().then(function(done){if(done)GG.vp=1})}chkSilent()}catch(e){}},30000);
+setTimeout(function(){try{if(ok()&&U){vacPull().then(function(d){if(d)GG.vp=1})}}catch(e){}},4000);
+window.addEventListener('online',function(){try{GG.vp=0;vacPull()}catch(e){}});
+document.addEventListener('visibilitychange',function(){try{if(!document.hidden)vacPull()}catch(e){}});
 })();
 </script>
 
